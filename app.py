@@ -160,8 +160,22 @@ try:
                 raise ValueError(f"Invalid timezone '{tz_str}' specified in {tz_var}")
 
             caldav_urls = [url.strip() for url in caldav_urls_str.split(",") if url.strip()]
-            USER_CONFIG[user_hash] = {"caldav_urls": caldav_urls, "weather_location": weather_loc, "timezone": tz_str}
-            print(f"Loaded config for user '{user_hash}': TZ={tz_str}, Loc={weather_loc}, URLs={len(caldav_urls)}")
+
+            # Parse the filter list if provided
+            caldav_filters = None
+            if caldav_filter_str:
+                caldav_filters = {name.strip() for name in caldav_filter_str.split(",") if name.strip()}
+                print(f"  Applying calendar name filter for user '{user_hash}': {caldav_filters}")
+
+            # Store all config including the filters
+            USER_CONFIG[user_hash] = {
+                "caldav_urls": caldav_urls,
+                "weather_location": weather_loc,
+                "timezone": tz_str,
+                "caldav_filters": caldav_filters, # Store the filter set (or None)
+            }
+            # Update print statement to show filter status
+            print(f"Loaded config for user '{user_hash}': TZ={tz_str}, Loc={weather_loc}, URLs={len(caldav_urls)}, Filters={'Yes' if caldav_filters else 'No'}")
 
 except ValueError as e:
     print(f"Configuration Error: {e}")
