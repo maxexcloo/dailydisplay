@@ -24,6 +24,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import caldav
 import requests
 from flask import Flask, abort, request, send_file
+from icalendar import Calendar # Add this import
 from PIL import Image, ImageDraw, ImageFont
 
 # ==============================================================================
@@ -336,10 +337,39 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                         # print(f"    Raw event data: {event.data}") # Potentially very verbose, uncomment if needed
                         # --- END RECURRENCE DEBUG ---
                         try:
-                            # Load the full iCalendar component for the event/instance
-                            ical_component = event.load().icalendar_component
-                            # print(f"    Loaded iCal component: {ical_component}") # Also verbose
+                            # Parse the iCalendar data directly from the event object's data attribute
+                            # This avoids a separate potentially failing event.load() call
+                            if not hasattr(event, 'data') or not event.data:
+                                print(f"    Skipping event: No data attribute found on event object. URL: {getattr(event, 'url', 'N/A')}")
+                                continue
 
+                            ical_component = None
+                            try:
+                                # Ensure event.data is bytes if needed by from_ical, or decode if it's already bytes
+                                ics_data = event.data
+                                if isinstance(ics_data, bytes):
+                                     # Attempt decoding with utf-8, fallback to latin-1 if needed
+                                     try:
+                                         ics_data = ics_data.decode('utf-8')
+                                     except UnicodeDecodeError:
+                                         print(f"    Warning: Decoding event data as UTF-8 failed, trying latin-1. URL: {getattr(event, 'url', 'N/A')}")
+                                         ics_data = ics_data.decode('latin-1', errors='replace')
+
+                                cal = Calendar.from_ical(ics_data)
+                                # Find the first VEVENT component in the parsed data
+                                for component in cal.walk('VEVENT'):
+                                    ical_component = component
+                                    break # Use the first VEVENT found
+                            except Exception as parse_ex:
+                                print(f"    Error parsing event data: {parse_ex}. URL: {getattr(event, 'url', 'N/A')}")
+                                traceback.print_exc()
+                                continue # Skip this event if parsing fails
+
+                            if not ical_component:
+                                print(f"    Skipping event: No VEVENT component found in event data. URL: {getattr(event, 'url', 'N/A')}")
+                                continue
+
+                            # Now extract components from the parsed VEVENT
                             summary_comp = ical_component.get("summary")
                             dtstart_comp = ical_component.get("dtstart")
                             recurrence_id_comp = ical_component.get("recurrence-id") # Get recurrence ID component
@@ -425,7 +455,6 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                     event_key = (time_str, summary)
                                     if event_key not in added_timed_today_keys:
                                         print(f"      -> Adding to timed_today") # DEBUG
-                                        print(f"      -> Adding to timed_today") # DEBUG
                                         timed_today.append(details)
                                         added_timed_today_keys.add(event_key)
                                     else: # DEBUG
@@ -435,7 +464,6 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                 if is_all_day:
                                     if summary not in added_all_tomorrow_titles:
                                         print(f"      -> Adding to all_tomorrow") # DEBUG
-                                        print(f"      -> Adding to all_tomorrow") # DEBUG
                                         all_tomorrow.append(details)
                                         added_all_tomorrow_titles.add(summary)
                                     else: # DEBUG
@@ -443,7 +471,6 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                 else:
                                     event_key = (time_str, summary)
                                     if event_key not in added_timed_tomorrow_keys:
-                                        print(f"      -> Adding to timed_tomorrow") # DEBUG
                                         print(f"      -> Adding to timed_tomorrow") # DEBUG
                                         timed_tomorrow.append(details)
                                         added_timed_tomorrow_keys.add(event_key)
