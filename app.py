@@ -44,23 +44,23 @@ BLACK_COLOR = 0
 WHITE_COLOR = 255
 
 # --- Layout ---
-PADDING_BASE = 20
+PADDING_BASE = 15 # Reduced padding
 LEFT_PANE_WIDTH_BASE = 320
-EVENT_COUNT_THRESHOLD = 10
-EVENT_FONT_SIZE_NORMAL_BASE = 24
-EVENT_FONT_SIZE_SMALL_BASE = 20
-EVENT_TIME_WIDTH_BASE = 70  # Width allocated for HH:MM time
-# EVENT_ALL_DAY_WIDTH_BASE = 90 (Removed - No longer needed for layout)
+# EVENT_COUNT_THRESHOLD = 10 (Removed - Using consistent smaller font)
+# EVENT_FONT_SIZE_NORMAL_BASE = 24 (Removed)
+EVENT_FONT_SIZE_BASE = 18 # Consistent smaller event font size
+EVENT_TIME_WIDTH_BASE = 65  # Slightly reduced width for time/icon
+# EVENT_ALL_DAY_WIDTH_BASE = 90 (Removed)
 # Computed Layout Dimensions
 PADDING = PADDING_BASE * RENDER_SCALE
 LEFT_PANE_WIDTH = LEFT_PANE_WIDTH_BASE * RENDER_SCALE
 RIGHT_PANE_WIDTH = IMG_WIDTH - LEFT_PANE_WIDTH
 COL_WIDTH = RIGHT_PANE_WIDTH // 2
-EVENT_FONT_SIZE_NORMAL = EVENT_FONT_SIZE_NORMAL_BASE * RENDER_SCALE
-EVENT_FONT_SIZE_SMALL = EVENT_FONT_SIZE_SMALL_BASE * RENDER_SCALE
+EVENT_FONT_SIZE = EVENT_FONT_SIZE_BASE * RENDER_SCALE # Renamed constant
+# EVENT_FONT_SIZE_SMALL = EVENT_FONT_SIZE_SMALL_BASE * RENDER_SCALE (Removed)
 EVENT_TIME_WIDTH = EVENT_TIME_WIDTH_BASE * RENDER_SCALE
 # EVENT_ALL_DAY_WIDTH = EVENT_ALL_DAY_WIDTH_BASE * RENDER_SCALE (Removed)
-EVENT_TITLE_MARGIN = 10 * RENDER_SCALE  # Margin between time/icon and title
+EVENT_TITLE_MARGIN = 8 * RENDER_SCALE  # Reduced margin
 
 # --- Fonts ---
 FONT_DIR = os.environ.get("FONT_DIR", "fonts")
@@ -198,16 +198,15 @@ elif not USER_CONFIG:
 # ==============================================================================
 try:
     LOADED_FONTS = {
-        "time": ImageFont.truetype(FONT_BOLD_PATH, 144),  # 72 * RENDER_SCALE
-        "date": ImageFont.truetype(FONT_REGULAR_PATH, 72),  # 36 * RENDER_SCALE
-        "weather_temp": ImageFont.truetype(FONT_BOLD_PATH, 64),  # 32 * RENDER_SCALE
-        "weather_details": ImageFont.truetype(FONT_REGULAR_PATH, 52),  # 26 * RENDER_SCALE
-        "header": ImageFont.truetype(FONT_BOLD_PATH, 60),  # 30 * RENDER_SCALE
-        "event_time_normal": ImageFont.truetype(FONT_BOLD_PATH, EVENT_FONT_SIZE_NORMAL),
-        "event_title_normal": ImageFont.truetype(FONT_REGULAR_PATH, EVENT_FONT_SIZE_NORMAL),
-        "event_time_small": ImageFont.truetype(FONT_BOLD_PATH, EVENT_FONT_SIZE_SMALL),
-        "event_title_small": ImageFont.truetype(FONT_REGULAR_PATH, EVENT_FONT_SIZE_SMALL),
-        "weather_icon": ImageFont.truetype(FONT_WEATHER_ICON_PATH, 160),  # 80 * RENDER_SCALE
+        "time": ImageFont.truetype(FONT_BOLD_PATH, 120),  # Reduced size (60 * RENDER_SCALE)
+        "date": ImageFont.truetype(FONT_REGULAR_PATH, 60),  # Reduced size (30 * RENDER_SCALE)
+        "weather_temp": ImageFont.truetype(FONT_BOLD_PATH, 56),  # Reduced size (28 * RENDER_SCALE)
+        "weather_details": ImageFont.truetype(FONT_REGULAR_PATH, 48),  # Reduced size (24 * RENDER_SCALE)
+        "header": ImageFont.truetype(FONT_BOLD_PATH, 52),  # Reduced size (26 * RENDER_SCALE)
+        # Removed normal event fonts, renamed small to default
+        "event_time": ImageFont.truetype(FONT_BOLD_PATH, EVENT_FONT_SIZE),
+        "event_title": ImageFont.truetype(FONT_REGULAR_PATH, EVENT_FONT_SIZE),
+        "weather_icon": ImageFont.truetype(FONT_WEATHER_ICON_PATH, 140),  # Reduced size (70 * RENDER_SCALE)
     }
     print("Successfully pre-loaded all required fonts.")
 except IOError as e:
@@ -606,25 +605,27 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     current_time_str = current_datetime_local.strftime("%H:%M")
     current_date_str = current_datetime_local.strftime("%A, %d %B")
 
-    total_events = len(today_events) + len(tomorrow_events)
-    use_small_font = total_events > EVENT_COUNT_THRESHOLD
-    event_time_font = fonts["event_time_small"] if use_small_font else fonts["event_time_normal"]
-    event_title_font = fonts["event_title_small"] if use_small_font else fonts["event_title_normal"]
+    # Use consistent event font sizes (threshold logic removed)
+    event_time_font = fonts["event_time"]
+    event_title_font = fonts["event_title"]
 
     # --- Draw Left Pane ---
+    # Slightly adjust vertical positioning for reduced font sizes
+    # Slightly adjust vertical positioning for reduced font sizes
     time_bbox = draw.textbbox((0, 0), current_time_str, font=fonts["time"])
     time_x = (LEFT_PANE_WIDTH - (time_bbox[2] - time_bbox[0])) // 2
-    time_y = PADDING + (10 * RENDER_SCALE)
+    time_y = PADDING + (5 * RENDER_SCALE) # Reduced top spacing
     draw.text((time_x, time_y), current_time_str, font=fonts["time"], fill=BLACK_COLOR)
 
     date_bbox = draw.textbbox((0, 0), current_date_str, font=fonts["date"])
     date_x = (LEFT_PANE_WIDTH - (date_bbox[2] - date_bbox[0])) // 2
-    date_y = time_y + (time_bbox[3] - time_bbox[1]) + (15 * RENDER_SCALE)
+    date_y = time_y + (time_bbox[3] - time_bbox[1]) + (10 * RENDER_SCALE) # Reduced spacing
     draw.text((date_x, date_y), current_date_str, font=fonts["date"], fill=BLACK_COLOR)
 
-    weather_section_h = 120 * RENDER_SCALE
+    # Adjust weather section layout
+    weather_section_h = 100 * RENDER_SCALE # Reduced height slightly
     weather_y_start = IMG_HEIGHT - PADDING - weather_section_h
-    icon_x, icon_y = PADDING, weather_y_start + (10 * RENDER_SCALE)
+    icon_x, icon_y = PADDING, weather_y_start + (5 * RENDER_SCALE) # Adjust Y
 
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
     if weather_info:
@@ -638,17 +639,30 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         if not is_day and wmo_code in OPEN_METEO_WMO_ICON_MAP_NIGHT
         else OPEN_METEO_WMO_ICON_MAP.get(wmo_code, OPEN_METEO_WMO_ICON_MAP["unknown"])
     )
-    draw.text((icon_x, icon_y), icon_char, font=fonts["weather_icon"], fill=BLACK_COLOR)
+    # Adjust icon Y position slightly for better vertical centering within its space
+    icon_bbox = draw.textbbox((0,0), icon_char, font=fonts["weather_icon"])
+    icon_h = icon_bbox[3] - icon_bbox[1]
+    icon_y_centered = weather_y_start + (weather_section_h - icon_h) // 2
+    draw.text((icon_x, icon_y_centered), icon_char, font=fonts["weather_icon"], fill=BLACK_COLOR)
 
-    icon_w = 80 * RENDER_SCALE  # Assumed width for positioning text
-    text_x, text_y = icon_x + icon_w + (15 * RENDER_SCALE), icon_y + (5 * RENDER_SCALE)
+    icon_w = 70 * RENDER_SCALE  # Adjusted assumed width for positioning text (matches new font size)
+    text_x = icon_x + icon_w + (10 * RENDER_SCALE) # Reduced spacing
+    # Adjust text Y start for better alignment with icon center
+    temp_bbox = draw.textbbox((0,0), "10°C", font=fonts["weather_temp"]) # Use sample text for height
+    details_bbox = draw.textbbox((0,0), "H:10° L:10°", font=fonts["weather_details"]) # Use sample text for height
+    temp_h = temp_bbox[3] - temp_bbox[1]
+    details_h = details_bbox[3] - details_bbox[1]
+    total_text_h = temp_h + (2 * details_h) + (2 * (4 * RENDER_SCALE)) # Approx total height
+    text_y_start = weather_y_start + (weather_section_h - total_text_h) // 2
+
+    text_y = text_y_start
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
     hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
     hum_str = f"Hum: {hum:.0f}%" if isinstance(hum, (int, float)) else "Hum: --%"
     draw.text((text_x, text_y), temp_str, font=fonts["weather_temp"], fill=BLACK_COLOR)
-    text_y += sum(fonts["weather_temp"].getmetrics()) + (4 * RENDER_SCALE)
+    text_y += temp_h + (4 * RENDER_SCALE) # Use calculated height
     draw.text((text_x, text_y), hilo_str, font=fonts["weather_details"], fill=BLACK_COLOR)
-    text_y += sum(fonts["weather_details"].getmetrics()) + (4 * RENDER_SCALE)
+    text_y += details_h + (4 * RENDER_SCALE) # Use calculated height
     draw.text((text_x, text_y), hum_str, font=fonts["weather_details"], fill=BLACK_COLOR)
 
     # --- Draw Right Pane ---
@@ -656,12 +670,13 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     draw.line([(LEFT_PANE_WIDTH, 0), (LEFT_PANE_WIDTH, IMG_HEIGHT)], fill=BLACK_COLOR, width=line_w)
     col_div_x = LEFT_PANE_WIDTH + COL_WIDTH
     draw.line([(col_div_x, 0), (col_div_x, IMG_HEIGHT)], fill=BLACK_COLOR, width=line_w)
-    header_y = (PADDING // RENDER_SCALE) * RENDER_SCALE
+    header_y = PADDING # Use calculated PADDING
     head_bbox = draw.textbbox((0, 0), "Today", font=fonts["header"])
+    header_h = head_bbox[3] - head_bbox[1]
     draw.text((LEFT_PANE_WIDTH + PADDING, header_y), "Today", font=fonts["header"], fill=BLACK_COLOR)
     draw.text((col_div_x + PADDING, header_y), "Tomorrow", font=fonts["header"], fill=BLACK_COLOR)
-    event_y_start = header_y + (head_bbox[3] - head_bbox[1]) + (15 * RENDER_SCALE)
-    event_title_margin = EVENT_TITLE_MARGIN
+    event_y_start = header_y + header_h + (10 * RENDER_SCALE) # Reduced spacing after header
+    event_title_margin = EVENT_TITLE_MARGIN # Already updated via constant
 
     # Today Column
     y_today = event_y_start
@@ -688,8 +703,18 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         # Calculate title position consistently using EVENT_TIME_WIDTH
         title_x = LEFT_PANE_WIDTH + PADDING + EVENT_TIME_WIDTH + event_title_margin
         title_max_w = COL_WIDTH - PADDING - EVENT_TIME_WIDTH - event_title_margin - PADDING # Ensure consistent max width
-        y_today = draw_text_with_wrapping(draw, title_str, (title_x, y_today), event_title_font, title_max_w, fill=event_color)
-        y_today += 10 * RENDER_SCALE  # Spacing between events
+
+        # Adjust vertical alignment: Center time/icon with the first line of the title
+        time_bbox = draw.textbbox((0,0), display_str, font=event_time_font)
+        time_h = time_bbox[3] - time_bbox[1]
+        # Estimate first line height of title (using ascent+descent is simpler than full wrap calc)
+        title_line_h = sum(event_title_font.getmetrics())
+        time_y_offset = (title_line_h - time_h) // 2 if title_line_h > time_h else 0
+        draw.text((LEFT_PANE_WIDTH + PADDING, y_today + time_y_offset), display_str, font=event_time_font, fill=event_color)
+
+        # Draw title and update y position
+        y_after_title = draw_text_with_wrapping(draw, title_str, (title_x, y_today), event_title_font, title_max_w, fill=event_color)
+        y_today = y_after_title + (6 * RENDER_SCALE)  # Reduced spacing between events
 
     # Tomorrow Column (Always black)
     y_tmrw = event_y_start
@@ -708,8 +733,17 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         # Calculate title position consistently using EVENT_TIME_WIDTH
         title_x = col_div_x + PADDING + EVENT_TIME_WIDTH + event_title_margin
         title_max_w = COL_WIDTH - PADDING - EVENT_TIME_WIDTH - event_title_margin - PADDING # Ensure consistent max width
-        y_tmrw = draw_text_with_wrapping(draw, title_str, (title_x, y_tmrw), event_title_font, title_max_w, fill=BLACK_COLOR)
-        y_tmrw += 10 * RENDER_SCALE
+
+        # Adjust vertical alignment: Center time/icon with the first line of the title
+        time_bbox = draw.textbbox((0,0), display_str, font=event_time_font)
+        time_h = time_bbox[3] - time_bbox[1]
+        title_line_h = sum(event_title_font.getmetrics())
+        time_y_offset = (title_line_h - time_h) // 2 if title_line_h > time_h else 0
+        draw.text((col_div_x + PADDING, y_tmrw + time_y_offset), display_str, font=event_time_font, fill=BLACK_COLOR)
+
+        # Draw title and update y position
+        y_after_title = draw_text_with_wrapping(draw, title_str, (title_x, y_tmrw), event_title_font, title_max_w, fill=BLACK_COLOR)
+        y_tmrw = y_after_title + (6 * RENDER_SCALE) # Reduced spacing between events
 
     # --- Downscale and Return ---
     img_final = img_large.resize((TARGET_IMG_WIDTH, TARGET_IMG_HEIGHT), Image.Resampling.LANCZOS)
