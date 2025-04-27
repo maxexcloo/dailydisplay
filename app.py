@@ -621,11 +621,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     weather_text_block_height = temp_height + (details_spacing * 2) + (details_line_height * 2)
 
     # Determine the maximum height between the icon and the text block
-    weather_section_h = max(icon_height, weather_text_block_height)
-
-    # --- Calculate Weather Section Position (Bottom Aligned & Vertically Centered) ---
-    weather_y_start = IMG_HEIGHT - PADDING - weather_section_h # Bottom edge alignment
-    weather_y_center = weather_y_start + (weather_section_h / 2) # Vertical center of the section
+    # weather_section_h = max(icon_height, weather_text_block_height) # No longer needed for y-pos
 
     # --- Calculate Weather Section Horizontal Centering ---
     # Get widths of elements
@@ -645,11 +641,15 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     icon_x = weather_x_start
     text_x = icon_x + icon_w + weather_padding_between
 
-    # Align icon's bottom to the section's bottom edge
-    icon_y = weather_y_start + weather_section_h - icon_height
+    # --- Calculate Weather Element Vertical Positions (Bottom Aligned) ---
+    bottom_y = IMG_HEIGHT - PADDING # Desired bottom edge for both elements
 
-    # Align text block's bottom to the section's bottom edge
-    text_y_start = weather_y_start + weather_section_h - weather_text_block_height
+    # Calculate top Y coordinate for the text block to align its bottom
+    text_y_start = bottom_y - weather_text_block_height
+
+    # Calculate top Y coordinate for the icon to align its bottom
+    # Note: Font metrics might include descent; visual alignment might need minor adjustment
+    icon_y = bottom_y - icon_height
 
     # --- Fetch and Prepare Weather Data ---
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
