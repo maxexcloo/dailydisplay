@@ -7,6 +7,7 @@
 #     "gunicorn",
 #     "pillow",
 #     "requests",
+#     "watchdog", # Recommended for Flask reloader, especially with threads
 # ]
 # ///
 
@@ -788,8 +789,8 @@ if __name__ == "__main__":
     refresh_thread = threading.Thread(target=background_refresh_loop, daemon=True)
     refresh_thread.start()
 
-    print("Starting Flask development server...")
+    print("Starting Flask development server with auto-reloading enabled...")
     # Note: Flask's built-in server is NOT recommended for production.
     # Use Gunicorn or another WSGI server via Docker as planned.
-    # Disable reloader when using background threads like this for stability.
-    app.run(host="0.0.0.0", port=5050, debug=False, use_reloader=False)
+    # Auto-reloading is enabled for development. Ensure 'watchdog' is installed for better reliability with threads.
+    app.run(host="0.0.0.0", port=5050, debug=True, use_reloader=True)
