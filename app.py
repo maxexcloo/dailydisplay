@@ -600,7 +600,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     draw.text((date_x, date_y), current_date_str, font=date_font, fill=BLACK_COLOR)
 
     # Weather section layout
-    weather_section_h = 120 * RENDER_SCALE
+    weather_section_h = 110 * RENDER_SCALE # Reduced height slightly
     weather_y_start = IMG_HEIGHT - PADDING - weather_section_h
     icon_x = PADDING
     icon_y = weather_y_start + (10 * RENDER_SCALE)
@@ -675,11 +675,15 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
 
         # Draw time for timed events, nothing for all-day or error events
         if not is_all_day and not is_error:
+            # Calculate width of a sample time string for consistent spacing
+            time_bbox = draw.textbbox((0, 0), "00:00", font=event_time_font)
+            actual_time_width = time_bbox[2] - time_bbox[0]
+
             # Draw time string near the left edge
             draw.text((LEFT_PANE_WIDTH + PADDING, y_today), time_str, font=event_time_font, fill=event_color)
-            # Calculate title position indented from time
-            title_x = LEFT_PANE_WIDTH + PADDING + EVENT_TIME_WIDTH + event_title_margin
-            title_max_w = COL_WIDTH - PADDING - EVENT_TIME_WIDTH - event_title_margin - PADDING
+            # Calculate title position indented from the calculated time width
+            title_x = LEFT_PANE_WIDTH + PADDING + actual_time_width + event_title_margin
+            title_max_w = COL_WIDTH - PADDING - actual_time_width - event_title_margin - PADDING
         else:
             # For all-day/error events, title starts near the left edge
             title_x = LEFT_PANE_WIDTH + PADDING
@@ -700,11 +704,15 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
 
         # Draw time for timed events, nothing for all-day events
         if not is_all_day:
+            # Calculate width of a sample time string for consistent spacing
+            time_bbox = draw.textbbox((0, 0), "00:00", font=event_time_font)
+            actual_time_width = time_bbox[2] - time_bbox[0]
+
             # Draw time string near the left edge of the column
             draw.text((col_div_x + PADDING, y_tmrw), time_str, font=event_time_font, fill=BLACK_COLOR)
-            # Calculate title position indented from time
-            title_x = col_div_x + PADDING + EVENT_TIME_WIDTH + event_title_margin
-            title_max_w = COL_WIDTH - PADDING - EVENT_TIME_WIDTH - event_title_margin - PADDING
+            # Calculate title position indented from the calculated time width
+            title_x = col_div_x + PADDING + actual_time_width + event_title_margin
+            title_max_w = COL_WIDTH - PADDING - actual_time_width - event_title_margin - PADDING
         else:
             # For all-day events, title starts near the left edge
             title_x = col_div_x + PADDING
