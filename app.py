@@ -653,11 +653,11 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     # Align text block relative to icon, using standard PADDING as a gap
     text_x = icon_x + icon_w + PADDING
 
-    # Prepare weather strings with symbols
+    # Prepare weather strings with text labels
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
-    # Using Unicode arrows (↑↓) and droplet (💧) - check font support
-    hilo_str = f"↑{high:.0f}° ↓{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "↑--° ↓--°"
-    hum_str = f"💧 {hum:.0f}%" if isinstance(hum, (int, float)) else "💧 --%"
+    # Using text labels H:/L: and Hum:
+    hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
+    hum_str = f"Hum: {hum:.0f}%" if isinstance(hum, (int, float)) else "Hum: --%"
 
     # Draw text elements using calculated start position (text_y_start) and spacing
     current_text_y = text_y_start # Use the vertically centered start position
