@@ -46,9 +46,9 @@ WHITE_COLOR = 255
 # --- Layout ---
 PADDING_BASE = 20 # Reverted padding
 LEFT_PANE_WIDTH_BASE = 320
-DATE_FONT_SIZE_BASE = 30 # Slightly smaller date font
-HEADER_FONT_SIZE_BASE = 26 # Increased header font size
-EVENT_FONT_SIZE_BASE = 18 # Keep event font size small
+DATE_FONT_SIZE_BASE = 30
+HEADER_FONT_SIZE_BASE = 26
+EVENT_FONT_SIZE_BASE = 18
 EVENT_TIME_WIDTH_BASE = 65
 # Computed Layout Dimensions
 PADDING = PADDING_BASE * RENDER_SCALE
@@ -330,13 +330,8 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                     results = calendar.date_search(start=start_date_local, end=end_date_local, expand=True)
 
                     for event in results:
-                        # --- RECURRENCE DEBUG ---
-                        print(f"  Processing result: Event URL: {getattr(event, 'url', 'N/A')}, Event ID: {getattr(event, 'id', 'N/A')}")
-                        # print(f"    Raw event data: {event.data}") # Potentially very verbose, uncomment if needed
-                        # --- END RECURRENCE DEBUG ---
                         try:
                             # Parse the iCalendar data directly from the event object's data attribute
-                            # This avoids a separate potentially failing event.load() call
                             if not hasattr(event, 'data') or not event.data:
                                 print(f"    Skipping event: No data attribute found on event object. URL: {getattr(event, 'url', 'N/A')}")
                                 continue
@@ -360,7 +355,7 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                     break # Use the first VEVENT found
                             except Exception as parse_ex:
                                 print(f"    Error parsing event data: {parse_ex}. URL: {getattr(event, 'url', 'N/A')}")
-                                traceback.print_exc()
+                                # traceback.print_exc() # Keep traceback for actual errors
                                 continue # Skip this event if parsing fails
 
                             if not ical_component:
@@ -384,22 +379,18 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                             using_recurrence_id = False
                             if recurrence_id_comp:
                                 recurrence_dt = recurrence_id_comp.dt
-                                print(f"      Detected Recurrence-ID: {recurrence_dt}") # DEBUG
                                 # Prefer recurrence ID if it's a datetime (for timed events)
                                 if isinstance(recurrence_dt, datetime.datetime):
                                     instance_start_time_obj = recurrence_dt
                                     using_recurrence_id = True
-                                    print(f"      Using Recurrence-ID (datetime) as instance start: {instance_start_time_obj}") # DEBUG
                                 # If recurrence ID is a date, check if original was all-day
                                 elif isinstance(recurrence_dt, datetime.date):
                                     original_is_all_day = isinstance(original_start_time_obj, datetime.date) and not isinstance(original_start_time_obj, datetime.datetime)
                                     if original_is_all_day:
                                         instance_start_time_obj = recurrence_dt # Use the date for all-day instance
                                         using_recurrence_id = True
-                                        print(f"      Using Recurrence-ID (date) as instance start: {instance_start_time_obj}") # DEBUG
                                     else:
-                                        # This is tricky: original was timed, recurrence ID is just a date.
-                                        # Combine recurrence date with original time?
+                                        # Original was timed, recurrence ID is just a date.
                                         # For now, log and fall back to original dtstart.
                                         # TODO: Potentially combine recurrence_dt with original_start_time_obj.time() and tzinfo
                                         print(f"      Warning: Timed event has date-only Recurrence-ID. Falling back to original dtstart for this instance.")
@@ -409,14 +400,6 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
 
                             # --- Determine if All Day based on the *instance* start time ---
                             is_all_day = isinstance(instance_start_time_obj, datetime.date) and not isinstance(instance_start_time_obj, datetime.datetime)
-                            print(f"      Instance Is All Day: {is_all_day}") # DEBUG
-
-                            # --- DETAILED TIMEZONE DEBUG ---
-                            raw_tzinfo = getattr(instance_start_time_obj, 'tzinfo', 'N/A (Not datetime)')
-                            recurrence_id_log_str = f", Recurrence-ID used: {using_recurrence_id}" # Renamed variable
-                            print(f"    Processing event: '{summary}', Instance start: {instance_start_time_obj}, Type: {type(instance_start_time_obj)}, Raw TZInfo: {raw_tzinfo}{recurrence_id_log_str}") # DEBUG
-                            # --- END DETAILED TIMEZONE DEBUG ---
-
 
                             # --- Localize and Format ---
                             if is_all_day:
@@ -437,48 +420,33 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                 continue
 
                             details = {"time": time_str, "title": summary, "sort_key": event_start_local}
-                            print(f"      -> Localized Instance Start: {event_start_local}, Time Str: '{time_str}'") # DEBUG
 
                             # Add event to the correct list if not already added (using localized instance start time)
                             if today_start <= event_start_local < today_end:
-                                print(f"      -> Categorizing as Today") # DEBUG
                                 if is_all_day:
                                     if summary not in added_all_today_titles:
-                                        print(f"      -> Adding to all_today") # DEBUG
                                         all_today.append(details)
                                         added_all_today_titles.add(summary)
-                                    else: # DEBUG
-                                        print(f"      -> Skipping all_today (duplicate title: {summary})") # DEBUG
                                 else:
                                     event_key = (time_str, summary)
                                     if event_key not in added_timed_today_keys:
-                                        print(f"      -> Adding to timed_today") # DEBUG
                                         timed_today.append(details)
                                         added_timed_today_keys.add(event_key)
-                                    else: # DEBUG
-                                        print(f"      -> Skipping timed_today (duplicate key: {event_key})") # DEBUG
                             elif tomorrow_start <= event_start_local < tomorrow_end:
-                                print(f"      -> Categorizing as Tomorrow") # DEBUG
                                 if is_all_day:
                                     if summary not in added_all_tomorrow_titles:
-                                        print(f"      -> Adding to all_tomorrow") # DEBUG
                                         all_tomorrow.append(details)
                                         added_all_tomorrow_titles.add(summary)
-                                    else: # DEBUG
-                                        print(f"      -> Skipping all_tomorrow (duplicate title: {summary})") # DEBUG
                                 else:
                                     event_key = (time_str, summary)
                                     if event_key not in added_timed_tomorrow_keys:
-                                        print(f"      -> Adding to timed_tomorrow") # DEBUG
                                         timed_tomorrow.append(details)
                                         added_timed_tomorrow_keys.add(event_key)
-                                    else: # DEBUG
-                                        print(f"      -> Skipping timed_tomorrow (duplicate key: {event_key})") # DEBUG
-                            else: # DEBUG
-                                print(f"      -> Skipping event: Instance start {event_start_local} is Outside Today/Tomorrow range ({today_start} to {tomorrow_end})") # DEBUG
+                            # else: Event is outside the desired range, no need to log normally
+
                         except Exception as event_ex:
                             print(f"    Error processing event '{summary if 'summary' in locals() else 'UNKNOWN'}': {event_ex}")
-                            traceback.print_exc() # DEBUG - More detail on event processing errors
+                            traceback.print_exc() # Keep traceback for actual errors
 
         except caldav.lib.error.AuthorizationError:
             err_msg = f"Auth Fail: {url_display_name}"
@@ -626,10 +594,10 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     draw.text((date_x, date_y), current_date_str, font=date_font, fill=BLACK_COLOR)
 
     # Weather section layout
-    weather_section_h = 120 * RENDER_SCALE # Keep height
+    weather_section_h = 120 * RENDER_SCALE
     weather_y_start = IMG_HEIGHT - PADDING - weather_section_h
-    icon_x = PADDING # Align icon to left padding
-    icon_y = weather_y_start + (10 * RENDER_SCALE) # Keep vertical position relative to section start
+    icon_x = PADDING
+    icon_y = weather_y_start + (10 * RENDER_SCALE)
 
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
     if weather_info:
@@ -643,20 +611,19 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         if not is_day and wmo_code in OPEN_METEO_WMO_ICON_MAP_NIGHT
         else OPEN_METEO_WMO_ICON_MAP.get(wmo_code, OPEN_METEO_WMO_ICON_MAP["unknown"])
     )
-    # Reverted icon drawing and text positioning
     draw.text((icon_x, icon_y), icon_char, font=fonts["weather_icon"], fill=BLACK_COLOR)
 
-    icon_w = 80 * RENDER_SCALE  # Keep assumed width
+    icon_w = 80 * RENDER_SCALE
     # Align text block relative to icon, using standard PADDING as a gap
     text_x = icon_x + icon_w + PADDING
-    text_y = icon_y + (5 * RENDER_SCALE) # Keep vertical start relative to icon Y
+    text_y = icon_y + (5 * RENDER_SCALE)
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
     hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
     hum_str = f"Hum: {hum:.0f}%" if isinstance(hum, (int, float)) else "Hum: --%"
     draw.text((text_x, text_y), temp_str, font=fonts["weather_temp"], fill=BLACK_COLOR)
-    text_y += sum(fonts["weather_temp"].getmetrics()) + (4 * RENDER_SCALE) # Reverted spacing calculation
+    text_y += sum(fonts["weather_temp"].getmetrics()) + (4 * RENDER_SCALE)
     draw.text((text_x, text_y), hilo_str, font=fonts["weather_details"], fill=BLACK_COLOR)
-    text_y += sum(fonts["weather_details"].getmetrics()) + (4 * RENDER_SCALE) # Reverted spacing calculation
+    text_y += sum(fonts["weather_details"].getmetrics()) + (4 * RENDER_SCALE)
     draw.text((text_x, text_y), hum_str, font=fonts["weather_details"], fill=BLACK_COLOR)
 
     # --- Draw Right Pane ---
@@ -664,11 +631,11 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     draw.line([(LEFT_PANE_WIDTH, 0), (LEFT_PANE_WIDTH, IMG_HEIGHT)], fill=BLACK_COLOR, width=line_w)
     col_div_x = LEFT_PANE_WIDTH + COL_WIDTH
     draw.line([(col_div_x, 0), (col_div_x, IMG_HEIGHT)], fill=BLACK_COLOR, width=line_w)
-    header_y = PADDING # Use calculated PADDING
-    header_font = fonts["header"] # Use the loaded header font
+    header_y = PADDING
+    header_font = fonts["header"]
     head_today_bbox = draw.textbbox((0, 0), "Today", font=header_font)
     head_tmrw_bbox = draw.textbbox((0, 0), "Tomorrow", font=header_font)
-    header_h = head_today_bbox[3] - head_today_bbox[1] # Height is the same
+    header_h = head_today_bbox[3] - head_today_bbox[1]
 
     # Center "Today" header
     today_head_w = head_today_bbox[2] - head_today_bbox[0]
@@ -680,8 +647,8 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     tmrw_head_x = col_div_x + (COL_WIDTH - tmrw_head_w) // 2
     draw.text((tmrw_head_x, header_y), "Tomorrow", font=header_font, fill=BLACK_COLOR)
 
-    event_y_start = header_y + header_h + (15 * RENDER_SCALE) # Increased spacing after header
-    event_title_margin = EVENT_TITLE_MARGIN # Already updated via constant
+    event_y_start = header_y + header_h + (15 * RENDER_SCALE)
+    event_title_margin = EVENT_TITLE_MARGIN
 
     # Today Column
     y_today = event_y_start
@@ -775,13 +742,11 @@ def display_image(user_hash):
         print(f"Warning: Data not yet available for user '{user_hash}'.")
         abort(503, description="Data is being refreshed, please try again shortly.")  # 503 Service Unavailable
 
-    # Get current time/date for display (independent of fetched data time)
+    # Get current time/date for display
     now_user_tz = datetime.datetime.now(user_tz)
-    # current_time_str = now_user_tz.strftime("%H:%M") # No longer needed separately
-    # current_date_str = now_user_tz.strftime("%A, %d %B") # No longer needed separately
 
     # Use the fetched data
-    weather_info = user_data.get("weather")  # Could be None if fetch failed
+    weather_info = user_data.get("weather")
     today_events = user_data.get("today_events", [])
     tomorrow_events = user_data.get("tomorrow_events", [])
     last_updated_ts = user_data.get("last_updated", 0)
