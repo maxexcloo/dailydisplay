@@ -617,9 +617,13 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     time_y = PADDING # Start time at top padding
     draw.text((time_x, time_y), current_time_str, font=time_font, fill=BLACK_COLOR)
 
-    date_y = time_y + time_height + (10 * RENDER_SCALE) # Add spacing below time
-    # Keep date left-aligned
-    draw.text((PADDING, date_y), current_date_str, font=fonts["date"], fill=BLACK_COLOR)
+    # Center Date horizontally and add more padding above
+    date_font = fonts["date"]
+    date_bbox = draw.textbbox((0, 0), current_date_str, font=date_font)
+    date_width = date_bbox[2] - date_bbox[0]
+    date_x = (LEFT_PANE_WIDTH - date_width) // 2 # Center horizontally
+    date_y = time_y + time_height + (20 * RENDER_SCALE) # Increased spacing below time
+    draw.text((date_x, date_y), current_date_str, font=date_font, fill=BLACK_COLOR)
 
     # Weather section layout
     weather_section_h = 120 * RENDER_SCALE # Keep height
