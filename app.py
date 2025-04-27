@@ -169,7 +169,6 @@ try:
             caldav_filters = None
             if caldav_filter_str:
                 caldav_filters = {name.strip() for name in caldav_filter_str.split(",") if name.strip()}
-                print(f"  Applying calendar name filter for user '{user_hash}': {caldav_filters}")
 
             # Store all config including the filters
             USER_CONFIG[user_hash] = {
@@ -243,13 +242,10 @@ def _fetch_lat_lon(location_name, session):
         print(f"Error processing geocoding response for '{location_name}': {e}")
         return None, None
 
-
 def background_refresh_loop():
     """Runs the refresh_all_data function periodically."""
-    print("Background thread started.")
     while True:
         # Wait *before* fetching, so the initial fetch isn't immediately followed by another
-        print(f"Background thread sleeping for {REFRESH_INTERVAL_SECONDS} seconds...")
         time.sleep(REFRESH_INTERVAL_SECONDS)
         try:
             refresh_all_data()
@@ -296,7 +292,6 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
     tomorrow_end = tomorrow_start + datetime.timedelta(days=1)
 
     for url in caldav_urls:
-        print(f"Processing CalDAV URL: {url[:url.find('@') + 1]}...")
         username, password, url_display_name = None, None, url
         try:
             parsed_url = urllib.parse.urlparse(url)
@@ -316,9 +311,8 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                 for calendar in calendars:
                     # Apply calendar name filtering if filters are provided
                     if caldav_filters and calendar.name not in caldav_filters:
-                        print(f"  Skipping calendar (filtered out): {calendar.name}")
                         continue
-                    print(f"  Searching calendar: {calendar.name}")  # Process this calendar
+                    # Process this calendar
 
                     results = calendar.date_search(start=start_date_local, end=end_date_local, expand=True)
 
@@ -459,10 +453,8 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
     # Combine errors, all-day, and timed events for each day
     return errors + all_today + timed_today, all_tomorrow + timed_tomorrow
 
-
 def fetch_weather_data(location, timezone_str):
     """Fetches weather data from Open-Meteo API. Returns fetched data or None on failure."""
-    print(f"Attempting to fetch weather for {location} (Timezone: {timezone_str})")
     weather_data = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1}
 
     with requests.Session() as session:
@@ -498,7 +490,6 @@ def fetch_weather_data(location, timezone_str):
             # Fallback to daily weather code if current is unknown
             if weather_data["icon_code"] == "unknown" and daily.get("weather_code"):
                 weather_data["icon_code"] = daily["weather_code"][0]
-            print(f"Successfully fetched weather for {location}")
             return weather_data  # Return fetched data
         except requests.exceptions.RequestException as e:
             print(f"Error during Open-Meteo forecast request for '{location}': {e}")
@@ -699,15 +690,12 @@ def img_to_bytes(img):
     img_byte_arr.seek(0)
     return img_byte_arr
 
-
 def refresh_all_data():
     """Fetches weather and calendar data for all configured users."""
-    print(f"Background task: Starting data refresh cycle at {datetime.datetime.now()}")
     global APP_DATA
     new_data = {}  # Build new data separately
 
     for user_hash, config in USER_CONFIG.items():
-        print(f"  Refreshing data for user: {user_hash}")
         timezone_str = config["timezone"]
         location = config["weather_location"]
         caldav_urls = config["caldav_urls"]
@@ -736,7 +724,6 @@ def refresh_all_data():
     # Update the global state safely
     with APP_DATA_LOCK:
         APP_DATA = new_data
-    print(f"Background task: Data refresh cycle finished at {datetime.datetime.now()}")
 
 
 # ==============================================================================
@@ -771,7 +758,7 @@ def display_image(user_hash):
     today_events = user_data.get("today_events", [])
     tomorrow_events = user_data.get("tomorrow_events", [])
     last_updated_ts = user_data.get("last_updated", 0)
-    print(f"Generating image for '{user_hash}' using data last updated at: {datetime.datetime.fromtimestamp(last_updated_ts)}")
+    # print(f"Generating image for '{user_hash}' using data last updated at: {datetime.datetime.fromtimestamp(last_updated_ts)}") # Optional: uncomment for debugging update times
 
     # Generate image
     try:
@@ -787,15 +774,9 @@ def display_image(user_hash):
 
 
 # ==============================================================================
-# Main Execution
+# Initial Data Fetch & Background Task Start (if users configured)
 # ==============================================================================
-if __name__ == "__main__":
-    if not USER_CONFIG and os.environ.get("USER_HASHES"):
-        print("Server cannot start: USER_HASHES set but no valid configurations loaded.")
-        exit(1)
-    if not USER_CONFIG:
-        print("Warning: No users configured, background refresh will do nothing.")
-
+if USER_CONFIG:
     # Perform initial data fetch before starting the server
     print("Performing initial data fetch...")
     refresh_all_data()
@@ -804,9 +785,13 @@ if __name__ == "__main__":
     # Start the background refresh thread
     refresh_thread = threading.Thread(target=background_refresh_loop, daemon=True)
     refresh_thread.start()
+else:
+    if os.environ.get("USER_HASHES"):
+        # This case should ideally be prevented by earlier checks, but added for safety
+        print("Server cannot start: USER_HASHES set but no valid configurations loaded.")
+        exit(1)
+    else:
+        print("Warning: No users configured. Background refresh thread not started.")
 
-    print("Starting Flask development server with auto-reloading enabled...")
-    # Note: Flask's built-in server is NOT recommended for production.
-    # Use Gunicorn or another WSGI server via Docker as planned.
-    # Auto-reloading is enabled for development. Ensure 'watchdog' is installed for better reliability with threads.
-    app.run(host="0.0.0.0", port=5050, debug=True, use_reloader=True)
+# Note: The Flask app object 'app' is now ready to be served by a WSGI server like Gunicorn.
+# The 'if __name__ == "__main__":' block with app.run() has been removed.
