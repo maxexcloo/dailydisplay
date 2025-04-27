@@ -627,7 +627,24 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     weather_y_start = IMG_HEIGHT - PADDING - weather_section_h # Bottom edge alignment
     weather_y_center = weather_y_start + (weather_section_h / 2) # Vertical center of the section
 
-    icon_x = PADDING
+    # --- Calculate Weather Section Horizontal Centering ---
+    # Get widths of elements
+    icon_w = icon_bbox[2] - icon_bbox[0] # Use actual calculated icon width
+    temp_bbox = draw.textbbox((0, 0), "00°C", font=weather_temp_font) # Recalculate for safety
+    hilo_bbox = draw.textbbox((0, 0), "H:00° L:00°", font=weather_details_font)
+    hum_bbox = draw.textbbox((0, 0), "Hum: 00%", font=weather_details_font)
+    weather_text_block_width = max(temp_bbox[2]-temp_bbox[0], hilo_bbox[2]-hilo_bbox[0], hum_bbox[2]-hum_bbox[0])
+
+    weather_padding_between = PADDING # Use standard padding between icon and text
+    total_weather_width = icon_w + weather_padding_between + weather_text_block_width
+
+    # Calculate starting X to center the whole block in the left pane
+    weather_x_start = (LEFT_PANE_WIDTH - total_weather_width) // 2
+
+    # Position icon and text relative to the centered start
+    icon_x = weather_x_start
+    text_x = icon_x + icon_w + weather_padding_between
+
     # Align icon's vertical center to the section's vertical center
     icon_y = weather_y_center - (icon_height / 2)
 
@@ -647,11 +664,10 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         if not is_day and wmo_code in OPEN_METEO_WMO_ICON_MAP_NIGHT
         else OPEN_METEO_WMO_ICON_MAP.get(wmo_code, OPEN_METEO_WMO_ICON_MAP["unknown"])
     )
+    # Draw icon at its calculated centered position
     draw.text((icon_x, icon_y), icon_char, font=fonts["weather_icon"], fill=BLACK_COLOR)
 
-    icon_w = 80 * RENDER_SCALE # Approximate width for layout
-    # Align text block relative to icon, using standard PADDING as a gap
-    text_x = icon_x + icon_w + PADDING
+    # Text block X position is already calculated relative to the centered icon (text_x)
 
     # Prepare weather strings with text labels
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
