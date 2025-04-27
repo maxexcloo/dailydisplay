@@ -7,7 +7,7 @@
 #     "gunicorn",
 #     "pillow",
 #     "requests",
-#     "watchdog", # Recommended for Flask reloader, especially with threads
+#     "watchdog",
 # ]
 # ///
 
