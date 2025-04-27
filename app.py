@@ -364,10 +364,10 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                 print(f"    Skipping event: Missing summary or dtstart. Raw dtstart: {dtstart_comp}")
                                 continue
 
-                            summary = str(summary_comp) # Update summary for potential error messages
+                            summary = str(summary_comp)
                             original_start_time_obj = dtstart_comp.dt  # Keep original for reference/fallback
 
-                            # --- Determine the actual start time for this instance ---
+                            # Determine the actual start time for this instance
                             instance_start_time_obj = original_start_time_obj  # Default to original dtstart
                             if recurrence_id_comp:
                                 recurrence_dt = recurrence_id_comp.dt
@@ -386,12 +386,11 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                         print(f"      Warning: Timed event '{summary}' has date-only Recurrence-ID. Falling back to original dtstart for this instance.")
                                 else:
                                     print(f"      Warning: Unexpected Recurrence-ID type for event '{summary}': {type(recurrence_dt)}. Using original dtstart.")
-                            # --- End Determine actual start time ---
 
-                            # --- Determine if All Day based on the *instance* start time ---
+                            # Determine if All Day based on the *instance* start time
                             is_all_day = isinstance(instance_start_time_obj, datetime.date) and not isinstance(instance_start_time_obj, datetime.datetime)
 
-                            # --- Localize and Format ---
+                            # Localize and Format
                             if is_all_day:
                                 # Combine the date part with midnight, then make timezone aware
                                 naive_dt = datetime.datetime.combine(instance_start_time_obj, datetime.time.min)
