@@ -614,14 +614,16 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     temp_height = temp_bbox[3] - temp_bbox[1]
 
     details_bbox = draw.textbbox((0, 0), "H:00° L:00°", font=weather_details_font)
-    details_line_height = details_bbox[3] - details_bbox[1]
-    details_spacing = 4 * RENDER_SCALE
+    details_spacing = 4 * RENDER_SCALE # Keep explicit spacing
 
-    # Total height of the text block (temp + 2 lines of details + spacing)
-    weather_text_block_height = temp_height + (details_spacing * 2) + (details_line_height * 2)
+    # Recalculate detail line heights using textbbox for accuracy
+    details_bbox_hilo = draw.textbbox((0, 0), "H:00° L:00°", font=weather_details_font)
+    details_hilo_height = details_bbox_hilo[3] - details_bbox_hilo[1]
+    details_bbox_hum = draw.textbbox((0, 0), "Hum: 00%", font=weather_details_font)
+    details_hum_height = details_bbox_hum[3] - details_bbox_hum[1]
 
-    # Determine the maximum height between the icon and the text block
-    # weather_section_h = max(icon_height, weather_text_block_height) # No longer needed for y-pos
+    # Total height of the text block using individual bbox heights
+    weather_text_block_height = temp_height + details_spacing + details_hilo_height + details_spacing + details_hum_height
 
     # --- Calculate Weather Section Horizontal Centering ---
     # Get widths of elements
@@ -641,26 +643,15 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     icon_x = weather_x_start
     text_x = icon_x + icon_w + weather_padding_between
 
-    # --- Calculate Weather Element Vertical Positions (Align Icon Bottom to Text Baseline) ---
-    bottom_y = IMG_HEIGHT - PADDING # Desired bottom edge for the text block
+    # --- Calculate Weather Element Vertical Positions (Align Bottom Edges) ---
+    section_bottom_y = IMG_HEIGHT - PADDING # Desired bottom edge for both elements
 
-    # 1. Calculate top Y coordinate for the text block to align its bottom
-    text_y_start = bottom_y - weather_text_block_height
+    # Calculate top Y coordinate for the text block using the refined height
+    text_y_start = section_bottom_y - weather_text_block_height
 
-    # 2. Calculate the Y coordinate where the *top* of the last line (humidity) will be drawn
-    #    Need heights calculated earlier: temp_height, details_line_height, details_spacing
-    hum_y_top = text_y_start + temp_height + details_spacing + details_line_height + details_spacing
-
-    # 3. Get ascent for the details font to find the baseline
-    weather_details_font = fonts["weather_details"] # Already loaded
-    details_ascent, _ = weather_details_font.getmetrics() # We only need ascent
-
-    # 4. Calculate the baseline Y of the humidity text
-    text_baseline_y = hum_y_top + details_ascent
-
-    # 5. Calculate the icon's top Y coordinate so its bottom aligns with the text baseline
-    #    Need icon_height calculated earlier
-    icon_y = text_baseline_y - icon_height
+    # Calculate top Y coordinate for the icon to align its bottom
+    # icon_height was calculated earlier using its bbox
+    icon_y = section_bottom_y - icon_height
 
     # --- Fetch and Prepare Weather Data ---
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
@@ -686,13 +677,14 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
     hum_str = f"Hum: {hum:.0f}%" if isinstance(hum, (int, float)) else "Hum: --%"
 
-    # Draw text elements using calculated start position (text_y_start) and spacing
-    current_text_y = text_y_start # Use the vertically centered start position
+    # Draw text elements using calculated start position (text_y_start) and refined heights/spacing
+    current_text_y = text_y_start
     draw.text((text_x, current_text_y), temp_str, font=fonts["weather_temp"], fill=BLACK_COLOR)
-    current_text_y += temp_height + details_spacing # Use calculated height and spacing
+    current_text_y += temp_height + details_spacing # Use temp_height from bbox
     draw.text((text_x, current_text_y), hilo_str, font=fonts["weather_details"], fill=BLACK_COLOR)
-    current_text_y += details_line_height + details_spacing # Use calculated height and spacing
+    current_text_y += details_hilo_height + details_spacing # Use hilo_height from bbox
     draw.text((text_x, current_text_y), hum_str, font=fonts["weather_details"], fill=BLACK_COLOR)
+    # The bottom of hum_str should now align near section_bottom_y
 
 
     # --- Draw Right Pane ---
