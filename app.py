@@ -596,7 +596,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     date_bbox = draw.textbbox((0, 0), current_date_str, font=date_font)
     date_width = date_bbox[2] - date_bbox[0]
     date_x = (LEFT_PANE_WIDTH - date_width) // 2 # Center horizontally
-    date_y = time_y + time_height + (20 * RENDER_SCALE) # Increased spacing below time
+    date_y = time_y + time_height + (25 * RENDER_SCALE) # Further increased spacing below time
     draw.text((date_x, date_y), current_date_str, font=date_font, fill=BLACK_COLOR)
 
     # Weather section layout
