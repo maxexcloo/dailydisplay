@@ -24,8 +24,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 # Third-Party Imports
 import caldav
 import requests
-from flask import Flask, abort, request, send_file
-from icalendar import Calendar # Add this import
+from flask import Flask, abort, send_file
+from icalendar import Calendar
 from PIL import Image, ImageDraw, ImageFont
 
 # ==============================================================================
@@ -44,12 +44,12 @@ BLACK_COLOR = 0
 WHITE_COLOR = 255
 
 # --- Layout ---
-PADDING_BASE = 20 # Reverted padding
+PADDING_BASE = 20  # Reverted padding
 LEFT_PANE_WIDTH_BASE = 320
 DATE_FONT_SIZE_BASE = 30
 HEADER_FONT_SIZE_BASE = 26
-EVENT_FONT_SIZE_BASE = 22 # Increased event font size
-EVENT_TIME_WIDTH_BASE = 75 # Increased width for event time
+EVENT_FONT_SIZE_BASE = 22  # Increased event font size
+EVENT_TIME_WIDTH_BASE = 75  # Increased width for event time
 # Computed Layout Dimensions
 PADDING = PADDING_BASE * RENDER_SCALE
 LEFT_PANE_WIDTH = LEFT_PANE_WIDTH_BASE * RENDER_SCALE
@@ -58,7 +58,7 @@ COL_WIDTH = RIGHT_PANE_WIDTH // 2
 HEADER_FONT_SIZE = HEADER_FONT_SIZE_BASE * RENDER_SCALE
 EVENT_FONT_SIZE = EVENT_FONT_SIZE_BASE * RENDER_SCALE
 EVENT_TIME_WIDTH = EVENT_TIME_WIDTH_BASE * RENDER_SCALE
-EVENT_TITLE_MARGIN = 10 * RENDER_SCALE # Increased margin
+EVENT_TITLE_MARGIN = 10 * RENDER_SCALE  # Increased margin
 
 # --- Fonts ---
 FONT_DIR = os.environ.get("FONT_DIR", "fonts")
@@ -142,12 +142,12 @@ try:
             weather_loc_var = f"WEATHER_LOCATION_{user_hash}"
             tz_var = f"TIMEZONE_{user_hash}"
             caldav_urls_var = f"CALDAV_URLS_{user_hash}"
-            caldav_filter_var = f"CALDAV_FILTER_NAMES_{user_hash}" # New variable name
+            caldav_filter_var = f"CALDAV_FILTER_NAMES_{user_hash}"  # New variable name
 
             weather_loc = os.environ.get(weather_loc_var)
             tz_str = os.environ.get(tz_var)
             caldav_urls_str = os.environ.get(caldav_urls_var, "")
-            caldav_filter_str = os.environ.get(caldav_filter_var) # Read the new variable
+            caldav_filter_str = os.environ.get(caldav_filter_var)  # Read the new variable
 
             if not weather_loc:
                 raise ValueError(f"Missing environment variable: {weather_loc_var}")
@@ -172,7 +172,7 @@ try:
                 "caldav_urls": caldav_urls,
                 "weather_location": weather_loc,
                 "timezone": tz_str,
-                "caldav_filters": caldav_filters, # Store the filter set (or None)
+                "caldav_filters": caldav_filters,  # Store the filter set (or None)
             }
             # Update print statement to show filter status
             print(f"Loaded config for user '{user_hash}': TZ={tz_str}, Loc={weather_loc}, URLs={len(caldav_urls)}, Filters={'Yes' if caldav_filters else 'No'}")
@@ -196,19 +196,17 @@ elif not USER_CONFIG:
 # Font Loading
 # ==============================================================================
 try:
-    DATE_FONT_SIZE = DATE_FONT_SIZE_BASE * RENDER_SCALE # Compute scaled date font size
+    DATE_FONT_SIZE = DATE_FONT_SIZE_BASE * RENDER_SCALE  # Compute scaled date font size
     LOADED_FONTS = {
         # Bold fonts - Assuming index 1 in Inter.ttc is Bold
         "time": ImageFont.truetype(FONT_BOLD_PATH, 144, index=1),
         "weather_temp": ImageFont.truetype(FONT_BOLD_PATH, 64, index=1),
         "header": ImageFont.truetype(FONT_BOLD_PATH, HEADER_FONT_SIZE, index=1),
         "event_time": ImageFont.truetype(FONT_BOLD_PATH, EVENT_FONT_SIZE, index=1),
-
         # Regular fonts - Assuming index 0 in Inter.ttc is Regular
         "date": ImageFont.truetype(FONT_REGULAR_PATH, DATE_FONT_SIZE, index=0),
         "weather_details": ImageFont.truetype(FONT_REGULAR_PATH, 52, index=0),
         "event_title": ImageFont.truetype(FONT_REGULAR_PATH, EVENT_FONT_SIZE, index=0),
-
         # Weather icon font remains the same
         "weather_icon": ImageFont.truetype(FONT_WEATHER_ICON_PATH, 160),
     }
@@ -331,14 +329,14 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                     if caldav_filters and calendar.name not in caldav_filters:
                         print(f"  Skipping calendar (filtered out): {calendar.name}")
                         continue
-                    print(f"  Searching calendar: {calendar.name}") # Process this calendar
+                    print(f"  Searching calendar: {calendar.name}")  # Process this calendar
 
                     results = calendar.date_search(start=start_date_local, end=end_date_local, expand=True)
 
                     for event in results:
                         try:
                             # Parse the iCalendar data directly from the event object's data attribute
-                            if not hasattr(event, 'data') or not event.data:
+                            if not hasattr(event, "data") or not event.data:
                                 print(f"    Skipping event: No data attribute found on event object. URL: {getattr(event, 'url', 'N/A')}")
                                 continue
 
@@ -347,22 +345,22 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                 # Ensure event.data is bytes if needed by from_ical, or decode if it's already bytes
                                 ics_data = event.data
                                 if isinstance(ics_data, bytes):
-                                     # Attempt decoding with utf-8, fallback to latin-1 if needed
-                                     try:
-                                         ics_data = ics_data.decode('utf-8')
-                                     except UnicodeDecodeError:
-                                         print(f"    Warning: Decoding event data as UTF-8 failed, trying latin-1. URL: {getattr(event, 'url', 'N/A')}")
-                                         ics_data = ics_data.decode('latin-1', errors='replace')
+                                    # Attempt decoding with utf-8, fallback to latin-1 if needed
+                                    try:
+                                        ics_data = ics_data.decode("utf-8")
+                                    except UnicodeDecodeError:
+                                        print(f"    Warning: Decoding event data as UTF-8 failed, trying latin-1. URL: {getattr(event, 'url', 'N/A')}")
+                                        ics_data = ics_data.decode("latin-1", errors="replace")
 
                                 cal = Calendar.from_ical(ics_data)
                                 # Find the first VEVENT component in the parsed data
-                                for component in cal.walk('VEVENT'):
+                                for component in cal.walk("VEVENT"):
                                     ical_component = component
-                                    break # Use the first VEVENT found
+                                    break  # Use the first VEVENT found
                             except Exception as parse_ex:
                                 print(f"    Error parsing event data: {parse_ex}. URL: {getattr(event, 'url', 'N/A')}")
                                 # traceback.print_exc() # Keep traceback for actual errors
-                                continue # Skip this event if parsing fails
+                                continue  # Skip this event if parsing fails
 
                             if not ical_component:
                                 print(f"    Skipping event: No VEVENT component found in event data. URL: {getattr(event, 'url', 'N/A')}")
@@ -371,17 +369,17 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                             # Now extract components from the parsed VEVENT
                             summary_comp = ical_component.get("summary")
                             dtstart_comp = ical_component.get("dtstart")
-                            recurrence_id_comp = ical_component.get("recurrence-id") # Get recurrence ID component
+                            recurrence_id_comp = ical_component.get("recurrence-id")  # Get recurrence ID component
 
                             if not summary_comp or not dtstart_comp:
                                 print(f"    Skipping event: Missing summary or dtstart. Raw dtstart: {dtstart_comp}")
                                 continue
 
                             summary = str(summary_comp)
-                            original_start_time_obj = dtstart_comp.dt # Keep original for reference/fallback
+                            original_start_time_obj = dtstart_comp.dt  # Keep original for reference/fallback
 
                             # --- Determine the actual start time for this instance ---
-                            instance_start_time_obj = original_start_time_obj # Default to original dtstart
+                            instance_start_time_obj = original_start_time_obj  # Default to original dtstart
                             using_recurrence_id = False
                             if recurrence_id_comp:
                                 recurrence_dt = recurrence_id_comp.dt
@@ -391,9 +389,11 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                     using_recurrence_id = True
                                 # If recurrence ID is a date, check if original was all-day
                                 elif isinstance(recurrence_dt, datetime.date):
-                                    original_is_all_day = isinstance(original_start_time_obj, datetime.date) and not isinstance(original_start_time_obj, datetime.datetime)
+                                    original_is_all_day = isinstance(original_start_time_obj, datetime.date) and not isinstance(
+                                        original_start_time_obj, datetime.datetime
+                                    )
                                     if original_is_all_day:
-                                        instance_start_time_obj = recurrence_dt # Use the date for all-day instance
+                                        instance_start_time_obj = recurrence_dt  # Use the date for all-day instance
                                         using_recurrence_id = True
                                     else:
                                         # Original was timed, recurrence ID is just a date.
@@ -411,17 +411,17 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                             if is_all_day:
                                 # Combine the date part with midnight, then make timezone aware
                                 naive_dt = datetime.datetime.combine(instance_start_time_obj, datetime.time.min)
-                                event_start_local = naive_dt.replace(tzinfo=user_tz) # Assign local timezone
+                                event_start_local = naive_dt.replace(tzinfo=user_tz)  # Assign local timezone
                                 time_str = "All Day"
                             elif isinstance(instance_start_time_obj, datetime.datetime):
                                 # Handle timezone: Convert aware times, assume naive times are in user's TZ
                                 if instance_start_time_obj.tzinfo:
                                     event_start_local = instance_start_time_obj.astimezone(user_tz)
-                                else: # Naive datetime
+                                else:  # Naive datetime
                                     # Assign user's timezone directly
                                     event_start_local = instance_start_time_obj.replace(tzinfo=user_tz)
                                 time_str = event_start_local.strftime("%H:%M")
-                            else: # Should not happen
+                            else:  # Should not happen
                                 print(f"    Skipping event '{summary}': Unexpected instance_start_time_obj type: {type(instance_start_time_obj)}")
                                 continue
 
@@ -452,7 +452,7 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
 
                         except Exception as event_ex:
                             print(f"    Error processing event '{summary if 'summary' in locals() else 'UNKNOWN'}': {event_ex}")
-                            traceback.print_exc() # Keep traceback for actual errors
+                            traceback.print_exc()  # Keep traceback for actual errors
 
         except caldav.lib.error.AuthorizationError:
             err_msg = f"Auth Fail: {url_display_name}"
@@ -508,9 +508,7 @@ def refresh_all_data():
         caldav_filters = config.get("caldav_filters")
 
         # Pass filters to the fetch function
-        today_events, tomorrow_events = fetch_calendar_events(
-            caldav_urls, start_of_today, end_of_fetch_range, timezone_str, caldav_filters
-        )
+        today_events, tomorrow_events = fetch_calendar_events(caldav_urls, start_of_today, end_of_fetch_range, timezone_str, caldav_filters)
 
         new_data[user_hash] = {
             "weather": weather_info,  # Will be None if fetch failed
@@ -575,7 +573,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
 
     # Format current time and date strings (use short format for date)
     current_time_str = current_datetime_local.strftime("%H:%M")
-    current_date_str = current_datetime_local.strftime("%a, %d %b") # Short day/month
+    current_date_str = current_datetime_local.strftime("%a, %d %b")  # Short day/month
 
     # Use consistent event font sizes (threshold logic removed)
     event_time_font = fonts["event_time"]
@@ -587,8 +585,8 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     time_bbox = draw.textbbox((0, 0), current_time_str, font=time_font)
     time_width = time_bbox[2] - time_bbox[0]
     time_height = time_bbox[3] - time_bbox[1]
-    time_x = (LEFT_PANE_WIDTH - time_width) // 2 # Center horizontally
-    time_y = PADDING # Start time at top padding
+    time_x = (LEFT_PANE_WIDTH - time_width) // 2  # Center horizontally
+    time_y = PADDING  # Start time at top padding
     draw.text((time_x, time_y), current_time_str, font=time_font, fill=BLACK_COLOR)
 
     # Center Date horizontally and add more padding above
@@ -596,8 +594,8 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     date_bbox = draw.textbbox((0, 0), current_date_str, font=date_font)
     date_width = date_bbox[2] - date_bbox[0]
     date_height = date_bbox[3] - date_bbox[1]
-    date_x = (LEFT_PANE_WIDTH - date_width) // 2 # Center horizontally
-    date_y = time_y + time_height + (25 * RENDER_SCALE) # Spacing below time
+    date_x = (LEFT_PANE_WIDTH - date_width) // 2  # Center horizontally
+    date_y = time_y + time_height + (25 * RENDER_SCALE)  # Spacing below time
     draw.text((date_x, date_y), current_date_str, font=date_font, fill=BLACK_COLOR)
 
     # --- Calculate Weather Section Height ---
@@ -607,14 +605,14 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     weather_details_font = fonts["weather_details"]
 
     # Calculate heights of text elements + spacing
-    icon_bbox = draw.textbbox((0, 0), "\uf00d", font=weather_icon_font) # Use a sample icon
+    icon_bbox = draw.textbbox((0, 0), "\uf00d", font=weather_icon_font)  # Use a sample icon
     icon_height = icon_bbox[3] - icon_bbox[1]
 
     temp_bbox = draw.textbbox((0, 0), "00°C", font=weather_temp_font)
     temp_height = temp_bbox[3] - temp_bbox[1]
 
     details_bbox = draw.textbbox((0, 0), "H:00° L:00°", font=weather_details_font)
-    details_spacing = 4 * RENDER_SCALE # Keep explicit spacing
+    details_spacing = 4 * RENDER_SCALE  # Keep explicit spacing
 
     # Recalculate detail line heights using textbbox for accuracy
     details_bbox_hilo = draw.textbbox((0, 0), "H:00° L:00°", font=weather_details_font)
@@ -627,13 +625,13 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
 
     # --- Calculate Weather Section Horizontal Centering ---
     # Get widths of elements
-    icon_w = icon_bbox[2] - icon_bbox[0] # Use actual calculated icon width
-    temp_bbox = draw.textbbox((0, 0), "00°C", font=weather_temp_font) # Recalculate for safety
+    icon_w = icon_bbox[2] - icon_bbox[0]  # Use actual calculated icon width
+    temp_bbox = draw.textbbox((0, 0), "00°C", font=weather_temp_font)  # Recalculate for safety
     hilo_bbox = draw.textbbox((0, 0), "H:00° L:00°", font=weather_details_font)
     hum_bbox = draw.textbbox((0, 0), "Hum: 00%", font=weather_details_font)
-    weather_text_block_width = max(temp_bbox[2]-temp_bbox[0], hilo_bbox[2]-hilo_bbox[0], hum_bbox[2]-hum_bbox[0])
+    weather_text_block_width = max(temp_bbox[2] - temp_bbox[0], hilo_bbox[2] - hilo_bbox[0], hum_bbox[2] - hum_bbox[0])
 
-    weather_padding_between = PADDING # Use standard padding between icon and text
+    weather_padding_between = PADDING  # Use standard padding between icon and text
     total_weather_width = icon_w + weather_padding_between + weather_text_block_width
 
     # Calculate starting X to center the whole block in the left pane
@@ -644,7 +642,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     text_x = icon_x + icon_w + weather_padding_between
 
     # --- Calculate Weather Element Vertical Positions (Align Bottom Edges) ---
-    section_bottom_y = IMG_HEIGHT - PADDING # Desired bottom edge for both elements
+    section_bottom_y = IMG_HEIGHT - PADDING  # Desired bottom edge for both elements
 
     # Calculate top Y coordinate for the text block using the refined height
     text_y_start = section_bottom_y - weather_text_block_height
@@ -680,12 +678,11 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     # Draw text elements using calculated start position (text_y_start) and refined heights/spacing
     current_text_y = text_y_start
     draw.text((text_x, current_text_y), temp_str, font=fonts["weather_temp"], fill=BLACK_COLOR)
-    current_text_y += temp_height + details_spacing # Use temp_height from bbox
+    current_text_y += temp_height + details_spacing  # Use temp_height from bbox
     draw.text((text_x, current_text_y), hilo_str, font=fonts["weather_details"], fill=BLACK_COLOR)
-    current_text_y += details_hilo_height + details_spacing # Use hilo_height from bbox
+    current_text_y += details_hilo_height + details_spacing  # Use hilo_height from bbox
     draw.text((text_x, current_text_y), hum_str, font=fonts["weather_details"], fill=BLACK_COLOR)
     # The bottom of hum_str should now align near section_bottom_y
-
 
     # --- Draw Right Pane ---
     line_w = 1 * RENDER_SCALE
@@ -742,7 +739,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         else:
             # For all-day/error events, title starts near the left edge
             title_x = LEFT_PANE_WIDTH + PADDING
-            title_max_w = COL_WIDTH - (2 * PADDING) # Full column width minus padding
+            title_max_w = COL_WIDTH - (2 * PADDING)  # Full column width minus padding
 
         # Draw title (always black unless grayed out) and update y position
         y_after_title = draw_text_with_wrapping(draw, title_str, (title_x, y_today), event_title_font, title_max_w, fill=event_color)
@@ -771,11 +768,11 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         else:
             # For all-day events, title starts near the left edge
             title_x = col_div_x + PADDING
-            title_max_w = COL_WIDTH - (2 * PADDING) # Full column width minus padding
+            title_max_w = COL_WIDTH - (2 * PADDING)  # Full column width minus padding
 
         # Draw title and update y position
         y_after_title = draw_text_with_wrapping(draw, title_str, (title_x, y_tmrw), event_title_font, title_max_w, fill=BLACK_COLOR)
-        y_tmrw = y_after_title + (6 * RENDER_SCALE) # Spacing between events
+        y_tmrw = y_after_title + (6 * RENDER_SCALE)  # Spacing between events
 
     # --- Downscale and Return ---
     img_final = img_large.resize((TARGET_IMG_WIDTH, TARGET_IMG_HEIGHT), Image.Resampling.LANCZOS)
