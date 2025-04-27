@@ -48,8 +48,8 @@ PADDING_BASE = 20 # Reverted padding
 LEFT_PANE_WIDTH_BASE = 320
 DATE_FONT_SIZE_BASE = 30
 HEADER_FONT_SIZE_BASE = 26
-EVENT_FONT_SIZE_BASE = 18
-EVENT_TIME_WIDTH_BASE = 65
+EVENT_FONT_SIZE_BASE = 22 # Increased event font size
+EVENT_TIME_WIDTH_BASE = 75 # Increased width for event time
 # Computed Layout Dimensions
 PADDING = PADDING_BASE * RENDER_SCALE
 LEFT_PANE_WIDTH = LEFT_PANE_WIDTH_BASE * RENDER_SCALE
@@ -58,7 +58,7 @@ COL_WIDTH = RIGHT_PANE_WIDTH // 2
 HEADER_FONT_SIZE = HEADER_FONT_SIZE_BASE * RENDER_SCALE
 EVENT_FONT_SIZE = EVENT_FONT_SIZE_BASE * RENDER_SCALE
 EVENT_TIME_WIDTH = EVENT_TIME_WIDTH_BASE * RENDER_SCALE
-EVENT_TITLE_MARGIN = 8 * RENDER_SCALE
+EVENT_TITLE_MARGIN = 10 * RENDER_SCALE # Increased margin
 
 # --- Fonts ---
 FONT_DIR = os.environ.get("FONT_DIR", "fonts")
@@ -645,11 +645,11 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     icon_x = weather_x_start
     text_x = icon_x + icon_w + weather_padding_between
 
-    # Align icon's vertical center to the section's vertical center
-    icon_y = weather_y_center - (icon_height / 2)
+    # Align icon's bottom to the section's bottom edge
+    icon_y = weather_y_start + weather_section_h - icon_height
 
-    # Align text block's vertical center to the section's vertical center
-    text_y_start = weather_y_center - (weather_text_block_height / 2)
+    # Align text block's bottom to the section's bottom edge
+    text_y_start = weather_y_start + weather_section_h - weather_text_block_height
 
     # --- Fetch and Prepare Weather Data ---
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
