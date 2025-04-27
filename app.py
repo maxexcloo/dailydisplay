@@ -49,7 +49,7 @@ EVENT_COUNT_THRESHOLD = 10
 EVENT_FONT_SIZE_NORMAL_BASE = 24
 EVENT_FONT_SIZE_SMALL_BASE = 20
 EVENT_TIME_WIDTH_BASE = 70  # Width allocated for HH:MM time
-EVENT_ALL_DAY_WIDTH_BASE = 90  # Approx width needed for "All Day" text
+# EVENT_ALL_DAY_WIDTH_BASE = 90 (Removed - No longer needed for layout)
 # Computed Layout Dimensions
 PADDING = PADDING_BASE * RENDER_SCALE
 LEFT_PANE_WIDTH = LEFT_PANE_WIDTH_BASE * RENDER_SCALE
@@ -58,8 +58,8 @@ COL_WIDTH = RIGHT_PANE_WIDTH // 2
 EVENT_FONT_SIZE_NORMAL = EVENT_FONT_SIZE_NORMAL_BASE * RENDER_SCALE
 EVENT_FONT_SIZE_SMALL = EVENT_FONT_SIZE_SMALL_BASE * RENDER_SCALE
 EVENT_TIME_WIDTH = EVENT_TIME_WIDTH_BASE * RENDER_SCALE
-EVENT_ALL_DAY_WIDTH = EVENT_ALL_DAY_WIDTH_BASE * RENDER_SCALE
-EVENT_TITLE_MARGIN = 10 * RENDER_SCALE  # Margin between time/allday and title
+# EVENT_ALL_DAY_WIDTH = EVENT_ALL_DAY_WIDTH_BASE * RENDER_SCALE (Removed)
+EVENT_TITLE_MARGIN = 10 * RENDER_SCALE  # Margin between time/icon and title
 
 # --- Fonts ---
 FONT_DIR = os.environ.get("FONT_DIR", "fonts")
@@ -679,12 +679,14 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
             if event_start_time and event_start_time < current_datetime_local:
                 event_color = GRAY_COLOR  # Event has passed
 
-        time_w = EVENT_ALL_DAY_WIDTH if is_all_day else EVENT_TIME_WIDTH
-        time_x_offset = PADDING // 2 if is_all_day else PADDING
-        draw.text((LEFT_PANE_WIDTH + time_x_offset, y_today), time_str, font=event_time_font, fill=event_color)
+        # Use icon for all-day, time string otherwise. Draw consistently aligned.
+        display_str = "●" if is_all_day else time_str
+        # Draw time/icon slightly indented
+        draw.text((LEFT_PANE_WIDTH + PADDING, y_today), display_str, font=event_time_font, fill=event_color)
 
-        title_x = LEFT_PANE_WIDTH + PADDING + (EVENT_ALL_DAY_WIDTH if is_all_day else EVENT_TIME_WIDTH) + event_title_margin
-        title_max_w = COL_WIDTH - PADDING - (EVENT_ALL_DAY_WIDTH if is_all_day else EVENT_TIME_WIDTH) - event_title_margin - PADDING
+        # Calculate title position consistently using EVENT_TIME_WIDTH
+        title_x = LEFT_PANE_WIDTH + PADDING + EVENT_TIME_WIDTH + event_title_margin
+        title_max_w = COL_WIDTH - PADDING - EVENT_TIME_WIDTH - event_title_margin - PADDING # Ensure consistent max width
         y_today = draw_text_with_wrapping(draw, title_str, (title_x, y_today), event_title_font, title_max_w, fill=event_color)
         y_today += 10 * RENDER_SCALE  # Spacing between events
 
@@ -696,11 +698,15 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         time_str = event.get("time", "--:--")
         title_str = event.get("title", "No Title")
         is_all_day = time_str == "All Day"
-        time_w = EVENT_ALL_DAY_WIDTH if is_all_day else EVENT_TIME_WIDTH
-        time_x_offset = PADDING // 2 if is_all_day else PADDING
-        draw.text((col_div_x + time_x_offset, y_tmrw), time_str, font=event_time_font, fill=BLACK_COLOR)
-        title_x = col_div_x + PADDING + (EVENT_ALL_DAY_WIDTH if is_all_day else EVENT_TIME_WIDTH) + event_title_margin
-        title_max_w = COL_WIDTH - PADDING - (EVENT_ALL_DAY_WIDTH if is_all_day else EVENT_TIME_WIDTH) - event_title_margin - PADDING
+
+        # Use icon for all-day, time string otherwise. Draw consistently aligned.
+        display_str = "●" if is_all_day else time_str
+        # Draw time/icon slightly indented
+        draw.text((col_div_x + PADDING, y_tmrw), display_str, font=event_time_font, fill=BLACK_COLOR)
+
+        # Calculate title position consistently using EVENT_TIME_WIDTH
+        title_x = col_div_x + PADDING + EVENT_TIME_WIDTH + event_title_margin
+        title_max_w = COL_WIDTH - PADDING - EVENT_TIME_WIDTH - event_title_margin - PADDING # Ensure consistent max width
         y_tmrw = draw_text_with_wrapping(draw, title_str, (title_x, y_tmrw), event_title_font, title_max_w, fill=BLACK_COLOR)
         y_tmrw += 10 * RENDER_SCALE
 
