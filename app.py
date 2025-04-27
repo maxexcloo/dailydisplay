@@ -46,6 +46,7 @@ WHITE_COLOR = 255
 # --- Layout ---
 PADDING_BASE = 20 # Reverted padding
 LEFT_PANE_WIDTH_BASE = 320
+DATE_FONT_SIZE_BASE = 30 # Slightly smaller date font
 HEADER_FONT_SIZE_BASE = 26 # Increased header font size
 EVENT_FONT_SIZE_BASE = 18 # Keep event font size small
 EVENT_TIME_WIDTH_BASE = 65
@@ -194,9 +195,10 @@ elif not USER_CONFIG:
 # Font Loading
 # ==============================================================================
 try:
+    DATE_FONT_SIZE = DATE_FONT_SIZE_BASE * RENDER_SCALE # Compute scaled date font size
     LOADED_FONTS = {
         "time": ImageFont.truetype(FONT_BOLD_PATH, 144),  # Reverted size (72 * RENDER_SCALE)
-        "date": ImageFont.truetype(FONT_REGULAR_PATH, 72),  # Reverted size (36 * RENDER_SCALE)
+        "date": ImageFont.truetype(FONT_REGULAR_PATH, DATE_FONT_SIZE),  # Use new date font size
         "weather_temp": ImageFont.truetype(FONT_BOLD_PATH, 64),  # Reverted size (32 * RENDER_SCALE)
         "weather_details": ImageFont.truetype(FONT_REGULAR_PATH, 52),  # Reverted size (26 * RENDER_SCALE)
         "header": ImageFont.truetype(FONT_BOLD_PATH, HEADER_FONT_SIZE), # Use new header size
@@ -597,9 +599,9 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     draw = ImageDraw.Draw(img_large)
     fonts = LOADED_FONTS  # Use pre-loaded fonts
 
-    # Format current time and date strings
+    # Format current time and date strings (use short format for date)
     current_time_str = current_datetime_local.strftime("%H:%M")
-    current_date_str = current_datetime_local.strftime("%A, %d %B")
+    current_date_str = current_datetime_local.strftime("%a, %d %b") # Short day/month
 
     # Use consistent event font sizes (threshold logic removed)
     event_time_font = fonts["event_time"]
