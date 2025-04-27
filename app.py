@@ -600,12 +600,36 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     date_y = time_y + time_height + (25 * RENDER_SCALE) # Spacing below time
     draw.text((date_x, date_y), current_date_str, font=date_font, fill=BLACK_COLOR)
 
-    # Weather section layout - Position below date with consistent spacing
-    weather_y_start = date_y + date_height + (25 * RENDER_SCALE) # Spacing below date
-    weather_section_h = 110 * RENDER_SCALE # Keep defined height for internal layout
-    icon_x = PADDING
-    icon_y = weather_y_start # Icon starts at the top of the weather section now
+    # --- Calculate Weather Section Height ---
+    # Get font metrics for height calculation
+    weather_icon_font = fonts["weather_icon"]
+    weather_temp_font = fonts["weather_temp"]
+    weather_details_font = fonts["weather_details"]
 
+    # Calculate heights of text elements + spacing
+    icon_bbox = draw.textbbox((0, 0), "\uf00d", font=weather_icon_font) # Use a sample icon
+    icon_height = icon_bbox[3] - icon_bbox[1]
+
+    temp_bbox = draw.textbbox((0, 0), "00°C", font=weather_temp_font)
+    temp_height = temp_bbox[3] - temp_bbox[1]
+
+    details_bbox = draw.textbbox((0, 0), "H:00° L:00°", font=weather_details_font)
+    details_line_height = details_bbox[3] - details_bbox[1]
+    details_spacing = 4 * RENDER_SCALE
+
+    # Total height of the text block (temp + 2 lines of details + spacing)
+    weather_text_block_height = temp_height + (details_spacing * 2) + (details_line_height * 2)
+
+    # Determine the maximum height between the icon and the text block
+    weather_section_h = max(icon_height, weather_text_block_height)
+
+    # --- Calculate Weather Section Position (Bottom Aligned) ---
+    weather_y_start = IMG_HEIGHT - PADDING - weather_section_h # Align bottom edge to IMG_HEIGHT - PADDING
+    icon_x = PADDING
+    # Align icon vertically within its allocated space (top of the section)
+    icon_y = weather_y_start
+
+    # --- Fetch and Prepare Weather Data ---
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
     if weather_info:
         temp, high, low, hum = (weather_info.get(k) for k in ("temp", "high", "low", "humidity"))
@@ -623,15 +647,21 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     icon_w = 80 * RENDER_SCALE
     # Align text block relative to icon, using standard PADDING as a gap
     text_x = icon_x + icon_w + PADDING
-    text_y = icon_y + (5 * RENDER_SCALE)
+    # Align text block vertically within its allocated space (top of the section)
+    text_y_start = weather_y_start
+
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
     hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
     hum_str = f"Hum: {hum:.0f}%" if isinstance(hum, (int, float)) else "Hum: --%"
-    draw.text((text_x, text_y), temp_str, font=fonts["weather_temp"], fill=BLACK_COLOR)
-    text_y += sum(fonts["weather_temp"].getmetrics()) + (4 * RENDER_SCALE)
-    draw.text((text_x, text_y), hilo_str, font=fonts["weather_details"], fill=BLACK_COLOR)
-    text_y += sum(fonts["weather_details"].getmetrics()) + (4 * RENDER_SCALE)
-    draw.text((text_x, text_y), hum_str, font=fonts["weather_details"], fill=BLACK_COLOR)
+
+    # Draw text elements using calculated start position and spacing
+    current_text_y = text_y_start
+    draw.text((text_x, current_text_y), temp_str, font=fonts["weather_temp"], fill=BLACK_COLOR)
+    current_text_y += temp_height + details_spacing # Use calculated height and spacing
+    draw.text((text_x, current_text_y), hilo_str, font=fonts["weather_details"], fill=BLACK_COLOR)
+    current_text_y += details_line_height + details_spacing # Use calculated height and spacing
+    draw.text((text_x, current_text_y), hum_str, font=fonts["weather_details"], fill=BLACK_COLOR)
+
 
     # --- Draw Right Pane ---
     line_w = 1 * RENDER_SCALE
