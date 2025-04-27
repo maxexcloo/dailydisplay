@@ -790,8 +790,6 @@ else:
     else:
         print("Warning: No users configured. Background refresh thread not started.")
 
-# The Flask app object 'app' is now ready to be served by a WSGI server like Gunicorn.
-
 # ==============================================================================
 # Main Execution (for direct script running / debugging)
 # ==============================================================================
