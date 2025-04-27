@@ -623,11 +623,16 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     # Determine the maximum height between the icon and the text block
     weather_section_h = max(icon_height, weather_text_block_height)
 
-    # --- Calculate Weather Section Position (Bottom Aligned) ---
-    weather_y_start = IMG_HEIGHT - PADDING - weather_section_h # Align bottom edge to IMG_HEIGHT - PADDING
+    # --- Calculate Weather Section Position (Bottom Aligned & Vertically Centered) ---
+    weather_y_start = IMG_HEIGHT - PADDING - weather_section_h # Bottom edge alignment
+    weather_y_center = weather_y_start + (weather_section_h / 2) # Vertical center of the section
+
     icon_x = PADDING
-    # Align icon vertically within its allocated space (top of the section)
-    icon_y = weather_y_start
+    # Align icon's vertical center to the section's vertical center
+    icon_y = weather_y_center - (icon_height / 2)
+
+    # Align text block's vertical center to the section's vertical center
+    text_y_start = weather_y_center - (weather_text_block_height / 2)
 
     # --- Fetch and Prepare Weather Data ---
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
@@ -644,18 +649,18 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     )
     draw.text((icon_x, icon_y), icon_char, font=fonts["weather_icon"], fill=BLACK_COLOR)
 
-    icon_w = 80 * RENDER_SCALE
+    icon_w = 80 * RENDER_SCALE # Approximate width for layout
     # Align text block relative to icon, using standard PADDING as a gap
     text_x = icon_x + icon_w + PADDING
-    # Align text block vertically within its allocated space (top of the section)
-    text_y_start = weather_y_start
 
+    # Prepare weather strings with symbols
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
-    hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
-    hum_str = f"Hum: {hum:.0f}%" if isinstance(hum, (int, float)) else "Hum: --%"
+    # Using Unicode arrows (↑↓) and droplet (💧) - check font support
+    hilo_str = f"↑{high:.0f}° ↓{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "↑--° ↓--°"
+    hum_str = f"💧 {hum:.0f}%" if isinstance(hum, (int, float)) else "💧 --%"
 
-    # Draw text elements using calculated start position and spacing
-    current_text_y = text_y_start
+    # Draw text elements using calculated start position (text_y_start) and spacing
+    current_text_y = text_y_start # Use the vertically centered start position
     draw.text((text_x, current_text_y), temp_str, font=fonts["weather_temp"], fill=BLACK_COLOR)
     current_text_y += temp_height + details_spacing # Use calculated height and spacing
     draw.text((text_x, current_text_y), hilo_str, font=fonts["weather_details"], fill=BLACK_COLOR)
