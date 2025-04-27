@@ -606,12 +606,17 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     event_title_font = fonts["event_title"]
 
     # --- Draw Left Pane ---
-    # Align Time and Date to the left using standard PADDING
+    # Center Time horizontally, align Date to left padding
+    time_font = fonts["time"]
+    time_bbox = draw.textbbox((0, 0), current_time_str, font=time_font)
+    time_width = time_bbox[2] - time_bbox[0]
+    time_height = time_bbox[3] - time_bbox[1]
+    time_x = (LEFT_PANE_WIDTH - time_width) // 2 # Center horizontally
     time_y = PADDING # Start time at top padding
-    draw.text((PADDING, time_y), current_time_str, font=fonts["time"], fill=BLACK_COLOR)
-    time_bbox = draw.textbbox((0, 0), current_time_str, font=fonts["time"]) # Get bbox after drawing for height
+    draw.text((time_x, time_y), current_time_str, font=time_font, fill=BLACK_COLOR)
 
-    date_y = time_y + (time_bbox[3] - time_bbox[1]) + (10 * RENDER_SCALE) # Add spacing below time
+    date_y = time_y + time_height + (10 * RENDER_SCALE) # Add spacing below time
+    # Keep date left-aligned
     draw.text((PADDING, date_y), current_date_str, font=fonts["date"], fill=BLACK_COLOR)
 
     # Weather section layout
