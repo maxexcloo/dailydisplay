@@ -36,6 +36,7 @@ from PIL import Image, ImageDraw, ImageFont
 RENDER_SCALE = 2
 TARGET_IMG_HEIGHT = 540
 TARGET_IMG_WIDTH = 960
+
 # Computed Image Dimensions
 IMG_HEIGHT = TARGET_IMG_HEIGHT * RENDER_SCALE
 IMG_WIDTH = TARGET_IMG_WIDTH * RENDER_SCALE
@@ -44,12 +45,13 @@ BLACK_COLOR = 0
 WHITE_COLOR = 255
 
 # --- Layout ---
-PADDING_BASE = 20  # Reverted padding
+PADDING_BASE = 20
 LEFT_PANE_WIDTH_BASE = 320
 DATE_FONT_SIZE_BASE = 30
 HEADER_FONT_SIZE_BASE = 26
-EVENT_FONT_SIZE_BASE = 22  # Increased event font size
-EVENT_TIME_WIDTH_BASE = 75  # Increased width for event time
+EVENT_FONT_SIZE_BASE = 22
+EVENT_TIME_WIDTH_BASE = 75
+
 # Computed Layout Dimensions
 PADDING = PADDING_BASE * RENDER_SCALE
 LEFT_PANE_WIDTH = LEFT_PANE_WIDTH_BASE * RENDER_SCALE
@@ -58,7 +60,7 @@ COL_WIDTH = RIGHT_PANE_WIDTH // 2
 HEADER_FONT_SIZE = HEADER_FONT_SIZE_BASE * RENDER_SCALE
 EVENT_FONT_SIZE = EVENT_FONT_SIZE_BASE * RENDER_SCALE
 EVENT_TIME_WIDTH = EVENT_TIME_WIDTH_BASE * RENDER_SCALE
-EVENT_TITLE_MARGIN = 10 * RENDER_SCALE  # Increased margin
+EVENT_TITLE_MARGIN = 10 * RENDER_SCALE
 
 # --- Fonts ---
 FONT_DIR = os.environ.get("FONT_DIR", "fonts")
@@ -66,6 +68,7 @@ FONT_DIR = os.environ.get("FONT_DIR", "fonts")
 FONT_BOLD_NAME = os.environ.get("FONT_BOLD_NAME", "Inter.ttc")
 FONT_REGULAR_NAME = os.environ.get("FONT_REGULAR_NAME", "Inter.ttc")
 FONT_WEATHER_ICON_NAME = os.environ.get("FONT_WEATHER_ICON_NAME", "weathericons-regular-webfont.ttf")
+
 # Computed Font Paths
 FONT_BOLD_PATH = os.path.join(FONT_DIR, FONT_BOLD_NAME)
 FONT_REGULAR_PATH = os.path.join(FONT_DIR, FONT_REGULAR_NAME)
@@ -174,7 +177,7 @@ try:
                 "timezone": tz_str,
                 "caldav_filters": caldav_filters,  # Store the filter set (or None)
             }
-            # Update print statement to show filter status
+
             print(f"Loaded config for user '{user_hash}': TZ={tz_str}, Loc={weather_loc}, URLs={len(caldav_urls)}, Filters={'Yes' if caldav_filters else 'No'}")
 
 except ValueError as e:
