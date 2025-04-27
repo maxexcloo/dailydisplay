@@ -647,9 +647,16 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     # Calculate top Y coordinate for the text block using the refined height
     text_y_start = section_bottom_y - weather_text_block_height
 
-    # Calculate top Y coordinate for the icon to align its bottom
+    # Calculate top Y coordinate for the icon to align its bottom bounding box
     # icon_height was calculated earlier using its bbox
-    icon_y = section_bottom_y - icon_height
+    icon_y_base = section_bottom_y - icon_height
+
+    # Apply a manual vertical adjustment to nudge the icon upwards slightly
+    # This compensates for potential extra space in the icon font's bounding box.
+    # Adjust this value if needed for better visual alignment.
+    ICON_VERTICAL_ADJUSTMENT = 5 * RENDER_SCALE
+    icon_y = icon_y_base - ICON_VERTICAL_ADJUSTMENT
+
 
     # --- Fetch and Prepare Weather Data ---
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
