@@ -62,8 +62,9 @@ EVENT_TITLE_MARGIN = 8 * RENDER_SCALE
 
 # --- Fonts ---
 FONT_DIR = os.environ.get("FONT_DIR", "fonts")
-FONT_BOLD_NAME = os.environ.get("FONT_BOLD_NAME", "DejaVuSans-Bold.ttf")
-FONT_REGULAR_NAME = os.environ.get("FONT_REGULAR_NAME", "DejaVuSans.ttf")
+# Use Inter.ttc for both regular and bold, selecting via index later
+FONT_BOLD_NAME = os.environ.get("FONT_BOLD_NAME", "Inter.ttc")
+FONT_REGULAR_NAME = os.environ.get("FONT_REGULAR_NAME", "Inter.ttc")
 FONT_WEATHER_ICON_NAME = os.environ.get("FONT_WEATHER_ICON_NAME", "weathericons-regular-webfont.ttf")
 # Computed Font Paths
 FONT_BOLD_PATH = os.path.join(FONT_DIR, FONT_BOLD_NAME)
@@ -197,16 +198,21 @@ elif not USER_CONFIG:
 try:
     DATE_FONT_SIZE = DATE_FONT_SIZE_BASE * RENDER_SCALE # Compute scaled date font size
     LOADED_FONTS = {
-        "time": ImageFont.truetype(FONT_BOLD_PATH, 144),  # Reverted size (72 * RENDER_SCALE)
-        "date": ImageFont.truetype(FONT_REGULAR_PATH, DATE_FONT_SIZE),  # Use new date font size
-        "weather_temp": ImageFont.truetype(FONT_BOLD_PATH, 64),  # Reverted size (32 * RENDER_SCALE)
-        "weather_details": ImageFont.truetype(FONT_REGULAR_PATH, 52),  # Reverted size (26 * RENDER_SCALE)
-        "header": ImageFont.truetype(FONT_BOLD_PATH, HEADER_FONT_SIZE), # Use new header size
-        "event_time": ImageFont.truetype(FONT_BOLD_PATH, EVENT_FONT_SIZE),
-        "event_title": ImageFont.truetype(FONT_REGULAR_PATH, EVENT_FONT_SIZE),
-        "weather_icon": ImageFont.truetype(FONT_WEATHER_ICON_PATH, 160),  # Reverted size (80 * RENDER_SCALE)
+        # Bold fonts - Assuming index 1 in Inter.ttc is Bold
+        "time": ImageFont.truetype(FONT_BOLD_PATH, 144, index=1),
+        "weather_temp": ImageFont.truetype(FONT_BOLD_PATH, 64, index=1),
+        "header": ImageFont.truetype(FONT_BOLD_PATH, HEADER_FONT_SIZE, index=1),
+        "event_time": ImageFont.truetype(FONT_BOLD_PATH, EVENT_FONT_SIZE, index=1),
+
+        # Regular fonts - Assuming index 0 in Inter.ttc is Regular
+        "date": ImageFont.truetype(FONT_REGULAR_PATH, DATE_FONT_SIZE, index=0),
+        "weather_details": ImageFont.truetype(FONT_REGULAR_PATH, 52, index=0),
+        "event_title": ImageFont.truetype(FONT_REGULAR_PATH, EVENT_FONT_SIZE, index=0),
+
+        # Weather icon font remains the same
+        "weather_icon": ImageFont.truetype(FONT_WEATHER_ICON_PATH, 160),
     }
-    print("Successfully pre-loaded all required fonts.")
+    print("Successfully pre-loaded all required fonts (using Inter.ttc with indices).")
 except IOError as e:
     print(f"CRITICAL ERROR: Could not load font file: {e}")
     print(f"Ensure font files exist: Regular='{FONT_REGULAR_PATH}', Bold='{FONT_BOLD_PATH}', Weather='{FONT_WEATHER_ICON_PATH}'")
