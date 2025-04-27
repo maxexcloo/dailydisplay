@@ -287,22 +287,8 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
     tomorrow_start = today_end
     tomorrow_end = tomorrow_start + datetime.timedelta(days=1)
 
-    # Retrieve calendar name filters for the current user (needs access to USER_CONFIG)
-    # Assuming USER_CONFIG is accessible globally here. Find the right user_hash first.
-    # This function needs the user_hash to get the correct filters. Let's modify its signature.
-    # --- NOTE: This requires changing the call site in refresh_all_data ---
-
-    # Find user_hash associated with this timezone_str (assuming unique timezones for simplicity, might need better mapping)
-    current_user_hash = None
-    for uh, cfg in USER_CONFIG.items():
-        if cfg["timezone"] == timezone_str and cfg["caldav_urls"] == caldav_urls: # Find user by matching config
-             current_user_hash = uh
-             break
-
-    caldav_filters = None
-    if current_user_hash:
-        caldav_filters = USER_CONFIG[current_user_hash].get("caldav_filters")
-
+    # The 'caldav_filters' set is now correctly passed as an argument.
+    # The redundant lookup code below has been removed.
 
     for url in caldav_urls:
         print(f"Processing CalDAV URL: {url[:url.find('@') + 1]}...")
