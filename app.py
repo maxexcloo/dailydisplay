@@ -141,10 +141,12 @@ try:
             weather_loc_var = f"WEATHER_LOCATION_{user_hash}"
             tz_var = f"TIMEZONE_{user_hash}"
             caldav_urls_var = f"CALDAV_URLS_{user_hash}"
+            caldav_filter_var = f"CALDAV_FILTER_NAMES_{user_hash}" # New variable name
 
             weather_loc = os.environ.get(weather_loc_var)
             tz_str = os.environ.get(tz_var)
             caldav_urls_str = os.environ.get(caldav_urls_var, "")
+            caldav_filter_str = os.environ.get(caldav_filter_var) # Read the new variable
 
             if not weather_loc:
                 raise ValueError(f"Missing environment variable: {weather_loc_var}")
@@ -270,8 +272,8 @@ def fetch_weather_data(location, timezone_str):
     return None  # Indicate failure
 
 
-def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezone_str):
-    """Fetches and processes calendar events from CalDAV URLs."""
+def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezone_str, caldav_filters=None):
+    """Fetches and processes calendar events from CalDAV URLs, optionally filtering by calendar name."""
     all_today, timed_today, all_tomorrow, timed_tomorrow, errors = [], [], [], [], []
     added_all_today_titles = set()
     added_timed_today_keys = set()
@@ -283,6 +285,23 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
     today_end = today_start + datetime.timedelta(days=1)
     tomorrow_start = today_end
     tomorrow_end = tomorrow_start + datetime.timedelta(days=1)
+
+    # Retrieve calendar name filters for the current user (needs access to USER_CONFIG)
+    # Assuming USER_CONFIG is accessible globally here. Find the right user_hash first.
+    # This function needs the user_hash to get the correct filters. Let's modify its signature.
+    # --- NOTE: This requires changing the call site in refresh_all_data ---
+
+    # Find user_hash associated with this timezone_str (assuming unique timezones for simplicity, might need better mapping)
+    current_user_hash = None
+    for uh, cfg in USER_CONFIG.items():
+        if cfg["timezone"] == timezone_str and cfg["caldav_urls"] == caldav_urls: # Find user by matching config
+             current_user_hash = uh
+             break
+
+    caldav_filters = None
+    if current_user_hash:
+        caldav_filters = USER_CONFIG[current_user_hash].get("caldav_filters")
+
 
     for url in caldav_urls:
         print(f"Processing CalDAV URL: {url[:url.find('@') + 1]}...")
@@ -303,7 +322,12 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                     continue
 
                 for calendar in calendars:
-                    print(f"  Searching calendar: {calendar.name}")
+                    # Apply calendar name filtering if filters are provided
+                    if caldav_filters and calendar.name not in caldav_filters:
+                        print(f"  Skipping calendar (filtered out): {calendar.name}")
+                        continue
+                    print(f"  Searching calendar: {calendar.name}") # Process this calendar
+
                     results = calendar.date_search(start=start_date_local, end=end_date_local, expand=True)
 
                     for event in results:
@@ -317,8 +341,12 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
 
                             summary = str(summary_comp)
                             start_time_obj = dtstart_comp.dt
+                            # --- DETAILED TIMEZONE DEBUG ---
+                            raw_tzinfo = getattr(start_time_obj, 'tzinfo', 'N/A (Not datetime)')
+                            print(f"    Processing event: '{summary}', Raw start: {start_time_obj}, Type: {type(start_time_obj)}, Raw TZInfo: {raw_tzinfo}") # DEBUG
+                            # --- END DETAILED TIMEZONE DEBUG ---
                             is_all_day = isinstance(start_time_obj, datetime.date) and not isinstance(start_time_obj, datetime.datetime)
-                            print(f"    Processing event: '{summary}', Raw start: {start_time_obj}, Is All Day: {is_all_day}") # DEBUG
+                            print(f"      Is All Day: {is_all_day}") # DEBUG (Simplified from previous log)
 
                             if is_all_day:
                                 naive_dt = datetime.datetime.combine(start_time_obj, datetime.time.min)
@@ -423,7 +451,14 @@ def refresh_all_data():
         start_of_today = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
         # Fetch events slightly beyond tomorrow to catch multi-day events correctly
         end_of_fetch_range = start_of_today + datetime.timedelta(days=2)
-        today_events, tomorrow_events = fetch_calendar_events(caldav_urls, start_of_today, end_of_fetch_range, timezone_str)
+
+        # Get filters for this user
+        caldav_filters = config.get("caldav_filters")
+
+        # Pass filters to the fetch function
+        today_events, tomorrow_events = fetch_calendar_events(
+            caldav_urls, start_of_today, end_of_fetch_range, timezone_str, caldav_filters
+        )
 
         new_data[user_hash] = {
             "weather": weather_info,  # Will be None if fetch failed
