@@ -312,11 +312,13 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                             summary_comp = ical_event.get("summary")
                             dtstart_comp = ical_event.get("dtstart")
                             if not summary_comp or not dtstart_comp:
+                                print(f"    Skipping event: Missing summary or dtstart. Raw dtstart: {dtstart_comp}")
                                 continue
 
                             summary = str(summary_comp)
                             start_time_obj = dtstart_comp.dt
                             is_all_day = isinstance(start_time_obj, datetime.date) and not isinstance(start_time_obj, datetime.datetime)
+                            print(f"    Processing event: '{summary}', Raw start: {start_time_obj}, Is All Day: {is_all_day}") # DEBUG
 
                             if is_all_day:
                                 naive_dt = datetime.datetime.combine(start_time_obj, datetime.time.min)
@@ -325,13 +327,15 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                             elif isinstance(start_time_obj, datetime.datetime):
                                 if start_time_obj.tzinfo:
                                     event_start_local = start_time_obj.astimezone(user_tz)
-                                else:
+                                else: # Naive datetime
                                     event_start_local = start_time_obj.replace(tzinfo=user_tz)
                                 time_str = event_start_local.strftime("%H:%M")
-                            else:
+                            else: # Should not happen if dtstart exists and is date/datetime
+                                print(f"    Skipping event '{summary}': Unexpected start_time_obj type: {type(start_time_obj)}")
                                 continue
 
                             details = {"time": time_str, "title": summary, "sort_key": event_start_local}
+                            print(f"      -> Localized Start: {event_start_local}, Time Str: '{time_str}'") # DEBUG
 
                             # Add event to the correct list if not already added
                             if today_start <= event_start_local < today_end:
@@ -342,20 +346,33 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                                 else:
                                     event_key = (time_str, summary)
                                     if event_key not in added_timed_today_keys:
+                                        print(f"      -> Adding to timed_today") # DEBUG
                                         timed_today.append(details)
                                         added_timed_today_keys.add(event_key)
+                                    else: # DEBUG
+                                        print(f"      -> Skipping timed_today (duplicate key: {event_key})") # DEBUG
                             elif tomorrow_start <= event_start_local < tomorrow_end:
+                                print(f"      -> Categorizing as Tomorrow") # DEBUG
                                 if is_all_day:
                                     if summary not in added_all_tomorrow_titles:
+                                        print(f"      -> Adding to all_tomorrow") # DEBUG
                                         all_tomorrow.append(details)
                                         added_all_tomorrow_titles.add(summary)
+                                    else: # DEBUG
+                                        print(f"      -> Skipping all_tomorrow (duplicate title: {summary})") # DEBUG
                                 else:
                                     event_key = (time_str, summary)
                                     if event_key not in added_timed_tomorrow_keys:
+                                        print(f"      -> Adding to timed_tomorrow") # DEBUG
                                         timed_tomorrow.append(details)
                                         added_timed_tomorrow_keys.add(event_key)
+                                    else: # DEBUG
+                                        print(f"      -> Skipping timed_tomorrow (duplicate key: {event_key})") # DEBUG
+                            else: # DEBUG
+                                print(f"      -> Skipping event: Outside Today/Tomorrow range ({today_start} <= {event_start_local} < {tomorrow_end})") # DEBUG
                         except Exception as event_ex:
-                            print(f"    Error processing event: {event_ex}")
+                            print(f"    Error processing event '{summary if 'summary' in locals() else 'UNKNOWN'}': {event_ex}")
+                            traceback.print_exc() # DEBUG - More detail on event processing errors
 
         except caldav.lib.error.AuthorizationError:
             err_msg = f"Auth Fail: {url_display_name}"
