@@ -606,18 +606,15 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     event_title_font = fonts["event_title"]
 
     # --- Draw Left Pane ---
-    # Reverted positioning logic
-    time_bbox = draw.textbbox((0, 0), current_time_str, font=fonts["time"])
-    time_x = (LEFT_PANE_WIDTH - (time_bbox[2] - time_bbox[0])) // 2
-    time_y = PADDING + (10 * RENDER_SCALE) # Reverted top spacing
-    draw.text((time_x, time_y), current_time_str, font=fonts["time"], fill=BLACK_COLOR)
+    # Align Time and Date to the left using standard PADDING
+    time_y = PADDING # Start time at top padding
+    draw.text((PADDING, time_y), current_time_str, font=fonts["time"], fill=BLACK_COLOR)
+    time_bbox = draw.textbbox((0, 0), current_time_str, font=fonts["time"]) # Get bbox after drawing for height
 
-    date_bbox = draw.textbbox((0, 0), current_date_str, font=fonts["date"])
-    date_x = (LEFT_PANE_WIDTH - (date_bbox[2] - date_bbox[0])) // 2
-    date_y = time_y + (time_bbox[3] - time_bbox[1]) + (15 * RENDER_SCALE) # Reverted spacing
-    draw.text((date_x, date_y), current_date_str, font=fonts["date"], fill=BLACK_COLOR)
+    date_y = time_y + (time_bbox[3] - time_bbox[1]) + (10 * RENDER_SCALE) # Add spacing below time
+    draw.text((PADDING, date_y), current_date_str, font=fonts["date"], fill=BLACK_COLOR)
 
-    # Reverted weather section layout
+    # Weather section layout
     weather_section_h = 120 * RENDER_SCALE # Reverted height
     weather_y_start = IMG_HEIGHT - PADDING - weather_section_h
     icon_x, icon_y = PADDING, weather_y_start + (10 * RENDER_SCALE) # Reverted Y
@@ -637,9 +634,10 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     # Reverted icon drawing and text positioning
     draw.text((icon_x, icon_y), icon_char, font=fonts["weather_icon"], fill=BLACK_COLOR)
 
-    icon_w = 80 * RENDER_SCALE  # Reverted assumed width
-    text_x = icon_x + icon_w + (15 * RENDER_SCALE) # Reverted spacing
-    text_y = icon_y + (5 * RENDER_SCALE) # Reverted Y start
+    icon_w = 80 * RENDER_SCALE  # Keep assumed width
+    # Align text block relative to icon, using standard PADDING as a gap
+    text_x = icon_x + icon_w + PADDING
+    text_y = icon_y + (5 * RENDER_SCALE) # Keep vertical start relative to icon Y
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
     hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
     hum_str = f"Hum: {hum:.0f}%" if isinstance(hum, (int, float)) else "Hum: --%"
