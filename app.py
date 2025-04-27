@@ -595,15 +595,16 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     date_font = fonts["date"]
     date_bbox = draw.textbbox((0, 0), current_date_str, font=date_font)
     date_width = date_bbox[2] - date_bbox[0]
+    date_height = date_bbox[3] - date_bbox[1]
     date_x = (LEFT_PANE_WIDTH - date_width) // 2 # Center horizontally
-    date_y = time_y + time_height + (25 * RENDER_SCALE) # Further increased spacing below time
+    date_y = time_y + time_height + (25 * RENDER_SCALE) # Spacing below time
     draw.text((date_x, date_y), current_date_str, font=date_font, fill=BLACK_COLOR)
 
-    # Weather section layout
-    weather_section_h = 110 * RENDER_SCALE # Reduced height slightly
-    weather_y_start = IMG_HEIGHT - PADDING - weather_section_h
+    # Weather section layout - Position below date with consistent spacing
+    weather_y_start = date_y + date_height + (25 * RENDER_SCALE) # Spacing below date
+    weather_section_h = 110 * RENDER_SCALE # Keep defined height for internal layout
     icon_x = PADDING
-    icon_y = weather_y_start + (10 * RENDER_SCALE)
+    icon_y = weather_y_start # Icon starts at the top of the weather section now
 
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
     if weather_info:
