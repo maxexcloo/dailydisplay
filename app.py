@@ -791,3 +791,13 @@ else:
         print("Warning: No users configured. Background refresh thread not started.")
 
 # The Flask app object 'app' is now ready to be served by a WSGI server like Gunicorn.
+
+# ==============================================================================
+# Main Execution (for direct script running / debugging)
+# ==============================================================================
+if __name__ == "__main__":
+    # Note: This block is for running the app directly with Flask's development server.
+    # For production, use a WSGI server like Gunicorn.
+    print("Starting Flask development server (for debugging)...")
+    # Auto-reloading is enabled. Ensure 'watchdog' is installed for better reliability with threads.
+    app.run(host="0.0.0.0", port=5050, debug=True, use_reloader=True)
