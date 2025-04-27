@@ -146,7 +146,7 @@ try:
             weather_loc_var = f"WEATHER_LOCATION_{user_hash}"
             tz_var = f"TIMEZONE_{user_hash}"
             caldav_urls_var = f"CALDAV_URLS_{user_hash}"
-            caldav_filter_var = f"CALDAV_FILTER_NAMES_{user_hash}"  # New variable name
+            caldav_filter_var = f"CALDAV_FILTER_NAMES_{user_hash}"
 
             weather_loc = os.environ.get(weather_loc_var)
             tz_str = os.environ.get(tz_var)
@@ -210,7 +210,6 @@ try:
         "date": ImageFont.truetype(FONT_REGULAR_PATH, DATE_FONT_SIZE, index=0),
         "weather_details": ImageFont.truetype(FONT_REGULAR_PATH, 52, index=0),
         "event_title": ImageFont.truetype(FONT_REGULAR_PATH, EVENT_FONT_SIZE, index=0),
-        # Weather icon font remains the same
         "weather_icon": ImageFont.truetype(FONT_WEATHER_ICON_PATH, 160),
     }
     print("Successfully pre-loaded all required fonts (using Inter.ttc with indices).")
@@ -312,12 +311,11 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                     # Apply calendar name filtering if filters are provided
                     if caldav_filters and calendar.name not in caldav_filters:
                         continue
-                    # Process this calendar
 
                     results = calendar.date_search(start=start_date_local, end=end_date_local, expand=True)
 
                     for event in results:
-                        summary = "UNKNOWN_EVENT" # Default summary for error reporting
+                        summary = "UNKNOWN_EVENT"
                         try:
                             # Parse the iCalendar data directly from the event object's data attribute
                             if not hasattr(event, "data") or not event.data:
@@ -538,7 +536,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     weather_details_font = fonts["weather_details"]
 
     # Calculate heights of weather elements
-    icon_bbox = draw.textbbox((0, 0), "\uf00d", font=weather_icon_font) # Sample icon for metrics
+    icon_bbox = draw.textbbox((0, 0), "\uf00d", font=weather_icon_font)
     icon_height = icon_bbox[3] - icon_bbox[1]
     temp_bbox = draw.textbbox((0, 0), "00°C", font=weather_temp_font)
     temp_height = temp_bbox[3] - temp_bbox[1]
@@ -577,7 +575,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
         wmo_code = weather_info.get("icon_code", "unknown")
         is_day = weather_info.get("is_day", 1)
     else:
-        wmo_code, is_day = "unknown", 1 # Default if fetch failed
+        wmo_code, is_day = "unknown", 1
 
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
     hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
@@ -629,7 +627,7 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     # Draw Today's Events
     y_today = event_y_start
     for event in today_events:
-        if y_today > IMG_HEIGHT - PADDING: break # Stop if exceeding bounds
+        if y_today > IMG_HEIGHT - PADDING: break
         time_str = event.get("time", "--:--")
         title_str = event.get("title", "No Title")
         is_all_day = time_str == "All Day"
@@ -644,12 +642,12 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
 
         # Calculate positions and draw time/title
         if not is_all_day and not is_error:
-            time_bbox = draw.textbbox((0, 0), "00:00", font=event_time_font) # Use fixed width for alignment
+            time_bbox = draw.textbbox((0, 0), "00:00", font=event_time_font)
             actual_time_width = time_bbox[2] - time_bbox[0]
             draw.text((LEFT_PANE_WIDTH + PADDING, y_today), time_str, font=event_time_font, fill=event_color)
             title_x = LEFT_PANE_WIDTH + PADDING + actual_time_width + event_title_margin
             title_max_w = COL_WIDTH - PADDING - actual_time_width - event_title_margin - PADDING
-        else: # All-day or error event
+        else:
             title_x = LEFT_PANE_WIDTH + PADDING
             title_max_w = COL_WIDTH - (2 * PADDING)
 
@@ -659,19 +657,19 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     # Draw Tomorrow's Events (Always black)
     y_tmrw = event_y_start
     for event in tomorrow_events:
-        if y_tmrw > IMG_HEIGHT - PADDING: break # Stop if exceeding bounds
+        if y_tmrw > IMG_HEIGHT - PADDING: break
         time_str = event.get("time", "--:--")
         title_str = event.get("title", "No Title")
         is_all_day = time_str == "All Day"
 
         # Calculate positions and draw time/title
         if not is_all_day:
-            time_bbox = draw.textbbox((0, 0), "00:00", font=event_time_font) # Use fixed width for alignment
+            time_bbox = draw.textbbox((0, 0), "00:00", font=event_time_font)
             actual_time_width = time_bbox[2] - time_bbox[0]
             draw.text((col_div_x + PADDING, y_tmrw), time_str, font=event_time_font, fill=BLACK_COLOR)
             title_x = col_div_x + PADDING + actual_time_width + event_title_margin
             title_max_w = COL_WIDTH - PADDING - actual_time_width - event_title_margin - PADDING
-        else: # All-day event
+        else:
             title_x = col_div_x + PADDING
             title_max_w = COL_WIDTH - (2 * PADDING)
 
@@ -758,7 +756,6 @@ def display_image(user_hash):
     today_events = user_data.get("today_events", [])
     tomorrow_events = user_data.get("tomorrow_events", [])
     last_updated_ts = user_data.get("last_updated", 0)
-    # print(f"Generating image for '{user_hash}' using data last updated at: {datetime.datetime.fromtimestamp(last_updated_ts)}") # Optional: uncomment for debugging update times
 
     # Generate image
     try:
@@ -793,5 +790,4 @@ else:
     else:
         print("Warning: No users configured. Background refresh thread not started.")
 
-# Note: The Flask app object 'app' is now ready to be served by a WSGI server like Gunicorn.
-# The 'if __name__ == "__main__":' block with app.run() has been removed.
+# The Flask app object 'app' is now ready to be served by a WSGI server like Gunicorn.
