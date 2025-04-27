@@ -641,15 +641,26 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     icon_x = weather_x_start
     text_x = icon_x + icon_w + weather_padding_between
 
-    # --- Calculate Weather Element Vertical Positions (Bottom Aligned) ---
-    bottom_y = IMG_HEIGHT - PADDING # Desired bottom edge for both elements
+    # --- Calculate Weather Element Vertical Positions (Align Icon Bottom to Text Baseline) ---
+    bottom_y = IMG_HEIGHT - PADDING # Desired bottom edge for the text block
 
-    # Calculate top Y coordinate for the text block to align its bottom
+    # 1. Calculate top Y coordinate for the text block to align its bottom
     text_y_start = bottom_y - weather_text_block_height
 
-    # Calculate top Y coordinate for the icon to align its bottom
-    # Note: Font metrics might include descent; visual alignment might need minor adjustment
-    icon_y = bottom_y - icon_height
+    # 2. Calculate the Y coordinate where the *top* of the last line (humidity) will be drawn
+    #    Need heights calculated earlier: temp_height, details_line_height, details_spacing
+    hum_y_top = text_y_start + temp_height + details_spacing + details_line_height + details_spacing
+
+    # 3. Get ascent for the details font to find the baseline
+    weather_details_font = fonts["weather_details"] # Already loaded
+    details_ascent, _ = weather_details_font.getmetrics() # We only need ascent
+
+    # 4. Calculate the baseline Y of the humidity text
+    text_baseline_y = hum_y_top + details_ascent
+
+    # 5. Calculate the icon's top Y coordinate so its bottom aligns with the text baseline
+    #    Need icon_height calculated earlier
+    icon_y = text_baseline_y - icon_height
 
     # --- Fetch and Prepare Weather Data ---
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
