@@ -615,9 +615,10 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     draw.text((PADDING, date_y), current_date_str, font=fonts["date"], fill=BLACK_COLOR)
 
     # Weather section layout
-    weather_section_h = 120 * RENDER_SCALE # Reverted height
+    weather_section_h = 120 * RENDER_SCALE # Keep height
     weather_y_start = IMG_HEIGHT - PADDING - weather_section_h
-    icon_x, icon_y = PADDING, weather_y_start + (10 * RENDER_SCALE) # Reverted Y
+    icon_x = PADDING # Align icon to left padding
+    icon_y = weather_y_start + (10 * RENDER_SCALE) # Keep vertical position relative to section start
 
     temp, high, low, hum, wmo_code, is_day = (None,) * 6  # Defaults
     if weather_info:
