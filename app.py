@@ -331,39 +331,85 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, timezon
                     results = calendar.date_search(start=start_date_local, end=end_date_local, expand=True)
 
                     for event in results:
+                        # --- RECURRENCE DEBUG ---
+                        print(f"  Processing result: Event URL: {getattr(event, 'url', 'N/A')}, Event ID: {getattr(event, 'id', 'N/A')}")
+                        # print(f"    Raw event data: {event.data}") # Potentially very verbose, uncomment if needed
+                        # --- END RECURRENCE DEBUG ---
                         try:
-                            ical_event = event.load().icalendar_component
-                            summary_comp = ical_event.get("summary")
-                            dtstart_comp = ical_event.get("dtstart")
+                            # Load the full iCalendar component for the event/instance
+                            ical_component = event.load().icalendar_component
+                            # print(f"    Loaded iCal component: {ical_component}") # Also verbose
+
+                            summary_comp = ical_component.get("summary")
+                            dtstart_comp = ical_component.get("dtstart")
+                            recurrence_id_comp = ical_component.get("recurrence-id") # Get recurrence ID component
+
                             if not summary_comp or not dtstart_comp:
                                 print(f"    Skipping event: Missing summary or dtstart. Raw dtstart: {dtstart_comp}")
                                 continue
 
                             summary = str(summary_comp)
-                            start_time_obj = dtstart_comp.dt
-                            # --- DETAILED TIMEZONE DEBUG ---
-                            raw_tzinfo = getattr(start_time_obj, 'tzinfo', 'N/A (Not datetime)')
-                            print(f"    Processing event: '{summary}', Raw start: {start_time_obj}, Type: {type(start_time_obj)}, Raw TZInfo: {raw_tzinfo}") # DEBUG
-                            # --- END DETAILED TIMEZONE DEBUG ---
-                            is_all_day = isinstance(start_time_obj, datetime.date) and not isinstance(start_time_obj, datetime.datetime)
-                            print(f"      Is All Day: {is_all_day}") # DEBUG (Simplified from previous log)
+                            original_start_time_obj = dtstart_comp.dt # Keep original for reference/fallback
 
+                            # --- Determine the actual start time for this instance ---
+                            instance_start_time_obj = original_start_time_obj # Default to original dtstart
+                            using_recurrence_id = False
+                            if recurrence_id_comp:
+                                recurrence_dt = recurrence_id_comp.dt
+                                print(f"      Detected Recurrence-ID: {recurrence_dt}") # DEBUG
+                                # Prefer recurrence ID if it's a datetime (for timed events)
+                                if isinstance(recurrence_dt, datetime.datetime):
+                                    instance_start_time_obj = recurrence_dt
+                                    using_recurrence_id = True
+                                    print(f"      Using Recurrence-ID (datetime) as instance start: {instance_start_time_obj}") # DEBUG
+                                # If recurrence ID is a date, check if original was all-day
+                                elif isinstance(recurrence_dt, datetime.date):
+                                    original_is_all_day = isinstance(original_start_time_obj, datetime.date) and not isinstance(original_start_time_obj, datetime.datetime)
+                                    if original_is_all_day:
+                                        instance_start_time_obj = recurrence_dt # Use the date for all-day instance
+                                        using_recurrence_id = True
+                                        print(f"      Using Recurrence-ID (date) as instance start: {instance_start_time_obj}") # DEBUG
+                                    else:
+                                        # This is tricky: original was timed, recurrence ID is just a date.
+                                        # Combine recurrence date with original time?
+                                        # For now, log and fall back to original dtstart.
+                                        # TODO: Potentially combine recurrence_dt with original_start_time_obj.time() and tzinfo
+                                        print(f"      Warning: Timed event has date-only Recurrence-ID. Falling back to original dtstart for this instance.")
+                                else:
+                                    print(f"      Warning: Unexpected Recurrence-ID type: {type(recurrence_dt)}. Using original dtstart.")
+                            # --- End Determine actual start time ---
+
+                            # --- Determine if All Day based on the *instance* start time ---
+                            is_all_day = isinstance(instance_start_time_obj, datetime.date) and not isinstance(instance_start_time_obj, datetime.datetime)
+                            print(f"      Instance Is All Day: {is_all_day}") # DEBUG
+
+                            # --- DETAILED TIMEZONE DEBUG ---
+                            raw_tzinfo = getattr(instance_start_time_obj, 'tzinfo', 'N/A (Not datetime)')
+                            recurrence_id_log_str = f", Recurrence-ID used: {using_recurrence_id}" # Renamed variable
+                            print(f"    Processing event: '{summary}', Instance start: {instance_start_time_obj}, Type: {type(instance_start_time_obj)}, Raw TZInfo: {raw_tzinfo}{recurrence_id_log_str}") # DEBUG
+                            # --- END DETAILED TIMEZONE DEBUG ---
+
+
+                            # --- Localize and Format ---
                             if is_all_day:
-                                naive_dt = datetime.datetime.combine(start_time_obj, datetime.time.min)
-                                event_start_local = naive_dt.replace(tzinfo=user_tz)
+                                # Combine the date part with midnight, then make timezone aware
+                                naive_dt = datetime.datetime.combine(instance_start_time_obj, datetime.time.min)
+                                event_start_local = naive_dt.replace(tzinfo=user_tz) # Assign local timezone
                                 time_str = "All Day"
-                            elif isinstance(start_time_obj, datetime.datetime):
-                                if start_time_obj.tzinfo:
-                                    event_start_local = start_time_obj.astimezone(user_tz)
+                            elif isinstance(instance_start_time_obj, datetime.datetime):
+                                # Handle timezone: Convert aware times, assume naive times are in user's TZ
+                                if instance_start_time_obj.tzinfo:
+                                    event_start_local = instance_start_time_obj.astimezone(user_tz)
                                 else: # Naive datetime
-                                    event_start_local = start_time_obj.replace(tzinfo=user_tz)
+                                    # Assign user's timezone directly
+                                    event_start_local = instance_start_time_obj.replace(tzinfo=user_tz)
                                 time_str = event_start_local.strftime("%H:%M")
-                            else: # Should not happen if dtstart exists and is date/datetime
-                                print(f"    Skipping event '{summary}': Unexpected start_time_obj type: {type(start_time_obj)}")
+                            else: # Should not happen
+                                print(f"    Skipping event '{summary}': Unexpected instance_start_time_obj type: {type(instance_start_time_obj)}")
                                 continue
 
                             details = {"time": time_str, "title": summary, "sort_key": event_start_local}
-                            print(f"      -> Localized Start: {event_start_local}, Time Str: '{time_str}'") # DEBUG
+                            print(f"      -> Localized Instance Start: {event_start_local}, Time Str: '{time_str}'") # DEBUG
 
                             # Add event to the correct list if not already added (using localized instance start time)
                             if today_start <= event_start_local < today_end:
