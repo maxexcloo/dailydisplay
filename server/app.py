@@ -12,7 +12,7 @@
 # ]
 # ///
 
-# Standard Library Imports (Sorted Alphabetically)
+# Standard Library Imports
 import datetime
 import io
 import os
@@ -22,7 +22,7 @@ import traceback
 import urllib.parse
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-# Third-Party Imports (Sorted Alphabetically)
+# Third-Party Imports
 import caldav
 import requests
 from dotenv import load_dotenv
@@ -31,7 +31,7 @@ from icalendar import Calendar
 from PIL import Image, ImageDraw, ImageFont
 
 # ==============================================================================
-# Load Environment Variables from .env file (if it exists)
+# Load Environment Variables (.env file takes lower precedence)
 # ==============================================================================
 load_dotenv()
 print("Attempted to load configuration from .env file (if present).")
@@ -43,7 +43,7 @@ print("Attempted to load configuration from .env file (if present).")
 
 # --- Colors ---
 COLOR_BLACK = 0
-COLOR_GRAY = 128  # Mid-gray for 'L' mode (past events)
+COLOR_GRAY = 128  # Mid-gray for 'L' mode (used for past events)
 COLOR_WHITE = 255
 
 # --- Image Settings ---
@@ -58,7 +58,7 @@ LAYOUT_COLUMN_WIDTH = LAYOUT_RIGHT_PANE_WIDTH // 2  # Width of Today/Tomorrow co
 LAYOUT_DIVIDER_LINE_WIDTH = 1
 LAYOUT_TIME_DATE_SPACING = 25  # Vertical space between time and date
 LAYOUT_WEATHER_DETAILS_SPACING = 4  # Vertical space within weather text block
-LAYOUT_WEATHER_ICON_V_ADJUST = 5  # Fine-tune vertical position of weather icon relative to bottom alignment
+LAYOUT_WEATHER_ICON_V_ADJUST = 5  # Pixels to adjust weather icon vertically relative to bottom alignment
 LAYOUT_EVENT_SPACING_AFTER = 6  # Vertical space after an event entry
 LAYOUT_EVENT_TITLE_MARGIN = 10  # Horizontal space between event time and title
 LAYOUT_EVENT_LINE_SPACING_EXTRA = 1  # Extra vertical space between wrapped text lines
@@ -90,7 +90,7 @@ REFRESH_INTERVAL_SECONDS = 10 * 60
 # --- Weather API & Icons ---
 API_OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 API_OPEN_METEO_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
-# Weather Icons from weathericons-regular-webfont.ttf
+# Weather Icons from weathericons-regular-webfont.ttf (Unicode Private Use Area)
 WEATHER_ICON_MAP_DAY = {
     0: "\uf00d",
     1: "\uf002",
@@ -145,36 +145,44 @@ try:
             if not user_hash:
                 continue
 
+            # Construct environment variable names dynamically
             weather_loc_var = f"WEATHER_LOCATION_{user_hash}"
             tz_var = f"TIMEZONE_{user_hash}"
             caldav_urls_var = f"CALDAV_URLS_{user_hash}"
             caldav_filter_var = f"CALDAV_FILTER_NAMES_{user_hash}"
 
+            # Retrieve values from environment (could be from OS or .env)
             weather_loc = os.environ.get(weather_loc_var)
             tz_str = os.environ.get(tz_var)
             caldav_urls_str = os.environ.get(caldav_urls_var, "")
             caldav_filter_str = os.environ.get(caldav_filter_var)
 
+            # Validate required configuration
             if not weather_loc:
                 raise ValueError(f"Missing configuration: {weather_loc_var}")
             if not tz_str:
                 raise ValueError(f"Missing configuration: {tz_var}")
 
+            # Validate Timezone
             try:
                 user_tz = ZoneInfo(tz_str)
             except ZoneInfoNotFoundError:
                 raise ValueError(f"Invalid timezone '{tz_str}' in {tz_var}")
 
+            # Parse CalDAV URLs
             caldav_urls = [url.strip() for url in caldav_urls_str.split(",") if url.strip()]
+
+            # Parse CalDAV calendar name filters (optional, case-insensitive)
             caldav_filters = None
             if caldav_filter_str:
                 caldav_filters = {name.strip().lower() for name in caldav_filter_str.split(",") if name.strip()}
 
+            # Store validated configuration for the user hash
             USER_CONFIG[user_hash] = {
                 "caldav_urls": caldav_urls,
                 "weather_location": weather_loc,
                 "timezone": tz_str,
-                "timezone_obj": user_tz,
+                "timezone_obj": user_tz,  # Store the ZoneInfo object for efficiency
                 "caldav_filters": caldav_filters,
             }
             filter_msg = f"Yes: {', '.join(caldav_filters)}" if caldav_filters else "No"
@@ -188,6 +196,7 @@ except Exception as e:
     traceback.print_exc()
     raise RuntimeError("Failed to load user configuration") from e
 
+# Final check after parsing all hashes
 if not USER_CONFIG and USER_HASHES_STR:
     print("Error: USER_HASHES is set, but no valid user configurations could be loaded.")
     raise RuntimeError("Failed to load any valid user configurations.")
@@ -200,7 +209,7 @@ elif not USER_CONFIG:
 LOADED_FONTS = {}
 try:
     # Load fonts using computed sizes and specific paths
-    # Assumes Inter.ttc indices: 0=Regular, 1=Bold (adjust if your font differs)
+    # Assumes Inter.ttc indices: 0=Regular, 1=Bold (adjust index if your font differs)
     LOADED_FONTS["time"] = ImageFont.truetype(FONT_PATH_BOLD, FONT_SIZE_TIME, index=1)
     LOADED_FONTS["date"] = ImageFont.truetype(FONT_PATH_REGULAR, FONT_SIZE_DATE, index=0)
     LOADED_FONTS["header"] = ImageFont.truetype(FONT_PATH_BOLD, FONT_SIZE_HEADER, index=1)
@@ -233,7 +242,7 @@ def _draw_date_section(draw, current_datetime_local, fonts, pane_width, start_y)
     date_height = date_bbox[3] - date_bbox[1]
     date_x = (pane_width - date_width) // 2
     draw.text((date_x, start_y), current_date_str, font=date_font, fill=COLOR_BLACK)
-    return start_y + date_height  # Return Y below drawn date
+    return start_y + date_height
 
 
 def _draw_event_column(draw, events, column_x_start, column_width, y_start, fonts, max_y, current_time=None, default_color=COLOR_BLACK):
@@ -245,7 +254,6 @@ def _draw_event_column(draw, events, column_x_start, column_width, y_start, font
     title_x_no_time = column_x_start + col_padding
     title_max_width_no_time = column_width - (2 * col_padding)
 
-    # Pre-calculate width of a sample time string for consistent title offset
     sample_time_bbox = draw.textbbox((0, 0), "00:00", font=event_time_font)
     actual_time_width = sample_time_bbox[2] - sample_time_bbox[0]
     title_x_with_time = column_x_start + col_padding + actual_time_width + LAYOUT_EVENT_TITLE_MARGIN
@@ -253,7 +261,7 @@ def _draw_event_column(draw, events, column_x_start, column_width, y_start, font
 
     for event in events:
         if y_pos > max_y:
-            break  # Stop if exceeding vertical space
+            break
 
         time_str = event.get("time", "--:--")
         title_str = event.get("title", "No Title")
@@ -267,29 +275,23 @@ def _draw_event_column(draw, events, column_x_start, column_width, y_start, font
             if event_start_time and isinstance(event_start_time, datetime.datetime) and event_start_time.tzinfo is not None:
                 if event_start_time < current_time:
                     event_color = COLOR_GRAY
-            elif event_start_time:  # Log if sort_key is unusable for comparison
+            elif event_start_time:
                 print(f"Warning: Event '{title_str}' has unexpected sort_key type: {type(event_start_time)}")
 
         time_x = column_x_start + col_padding
         if not is_all_day and not is_error:
-            # Draw timed event time
             draw.text((time_x, y_pos), time_str, font=event_time_font, fill=event_color)
             title_x = title_x_with_time
             title_max_w = title_max_width_with_time
         else:
-            # All-day or Error event (title starts at left padding)
             title_x = title_x_no_time
             title_max_w = title_max_width_no_time
-            # Draw "All Day" text using the title font for consistent alignment
             if is_all_day:
                 draw.text((time_x, y_pos), time_str, font=event_title_font, fill=event_color)
-                # Title still starts normally for wrapping calculation
                 title_x = title_x_no_time
 
-        # Draw the title (potentially wrapped)
         y_after_title = draw_text_with_wrapping(draw, title_str, (title_x, y_pos), event_title_font, title_max_w, fill=event_color)
 
-        # Update y_pos for the next event, ensuring minimum height
         ascent, descent = event_title_font.getmetrics()
         line_height = ascent + descent
         min_event_height = line_height + LAYOUT_EVENT_SPACING_AFTER
@@ -306,7 +308,7 @@ def _draw_time_section(draw, current_datetime_local, fonts, pane_width, start_y)
     time_height = time_bbox[3] - time_bbox[1]
     time_x = (pane_width - time_width) // 2
     draw.text((time_x, start_y), current_time_str, font=time_font, fill=COLOR_BLACK)
-    return start_y + time_height  # Return Y below drawn time
+    return start_y + time_height
 
 
 def _draw_weather_section(draw, weather_info, fonts, pane_width, bottom_y):
@@ -315,7 +317,6 @@ def _draw_weather_section(draw, weather_info, fonts, pane_width, bottom_y):
     weather_temp_font = fonts["weather_temp"]
     weather_details_font = fonts["weather_details"]
 
-    # Prepare weather data strings, handling None values
     temp, high, low, hum, wmo_code, is_day = (None,) * 6
     if weather_info:
         temp = weather_info.get("temp")
@@ -325,7 +326,7 @@ def _draw_weather_section(draw, weather_info, fonts, pane_width, bottom_y):
         wmo_code = weather_info.get("icon_code", "unknown")
         is_day = weather_info.get("is_day", 1)
     else:
-        wmo_code, is_day = "unknown", 1  # Defaults if fetch failed
+        wmo_code, is_day = "unknown", 1
 
     temp_str = f"{temp:.0f}°C" if isinstance(temp, (int, float)) else "--°C"
     hilo_str = f"H:{high:.0f}° L:{low:.0f}°" if isinstance(high, (int, float)) and isinstance(low, (int, float)) else "H:--° L:--°"
@@ -336,7 +337,6 @@ def _draw_weather_section(draw, weather_info, fonts, pane_width, bottom_y):
         else WEATHER_ICON_MAP_DAY.get(wmo_code, WEATHER_ICON_MAP_DAY["unknown"])
     )
 
-    # Calculate element sizes using textbbox for accuracy
     icon_bbox = draw.textbbox((0, 0), icon_char, font=weather_icon_font)
     icon_width, icon_height = icon_bbox[2] - icon_bbox[0], icon_bbox[3] - icon_bbox[1]
     temp_bbox = draw.textbbox((0, 0), temp_str, font=weather_temp_font)
@@ -346,20 +346,17 @@ def _draw_weather_section(draw, weather_info, fonts, pane_width, bottom_y):
     hum_bbox = draw.textbbox((0, 0), hum_str, font=weather_details_font)
     hum_width, hum_height = hum_bbox[2] - hum_bbox[0], hum_bbox[3] - hum_bbox[1]
 
-    # Layout calculations: Center the combined weather block horizontally
     weather_text_block_height = temp_height + LAYOUT_WEATHER_DETAILS_SPACING + hilo_height + LAYOUT_WEATHER_DETAILS_SPACING + hum_height
     weather_text_block_width = max(temp_width, hilo_width, hum_width)
-    weather_padding_between = LAYOUT_PADDING  # Space between icon and text block
+    weather_padding_between = LAYOUT_PADDING
     total_weather_width = icon_width + weather_padding_between + weather_text_block_width
     weather_x_start = (pane_width - total_weather_width) // 2
     icon_x = weather_x_start
     text_x = icon_x + icon_width + weather_padding_between
 
-    # Align bottom of the weather block to the specified bottom_y
     text_y_start = bottom_y - weather_text_block_height
-    icon_y = bottom_y - icon_height - LAYOUT_WEATHER_ICON_V_ADJUST  # Align bottom of icon (with adjustment)
+    icon_y = bottom_y - icon_height - LAYOUT_WEATHER_ICON_V_ADJUST
 
-    # Draw elements
     draw.text((icon_x, icon_y), icon_char, font=weather_icon_font, fill=COLOR_BLACK)
     current_text_y = text_y_start
     draw.text((text_x, current_text_y), temp_str, font=weather_temp_font, fill=COLOR_BLACK)
@@ -373,14 +370,12 @@ def _fetch_lat_lon(location_name, session):
     """Internal helper to fetch latitude/longitude using Open-Meteo Geocoding."""
     params = {"name": location_name, "count": 1, "language": "en", "format": "json"}
     try:
-        # Use a slightly shorter timeout for geocoding vs weather forecast
         response = session.get(API_OPEN_METEO_GEOCODE_URL, params=params, timeout=FETCH_WEATHER_TIMEOUT // 2)
         response.raise_for_status()
         data = response.json()
         if data and data.get("results"):
             result = data["results"][0]
             lat, lon = result.get("latitude"), result.get("longitude")
-            # Basic validation of coordinate types
             if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
                 return lat, lon
             else:
@@ -391,26 +386,24 @@ def _fetch_lat_lon(location_name, session):
         print(f"Error: Geocoding request for '{location_name}' timed out.")
     except requests.exceptions.RequestException as e:
         print(f"Error during geocoding request for '{location_name}': {e}")
-    except (KeyError, IndexError, ValueError) as e:  # Catch potential issues parsing the response
+    except (KeyError, IndexError, ValueError) as e:
         print(f"Error processing geocoding response for '{location_name}': {e}")
     except Exception as e:
         print(f"Unexpected error during geocoding for '{location_name}': {e}")
         traceback.print_exc()
-    return None, None  # Return None tuple on any failure
+    return None, None
 
 
 def background_refresh_loop():
     """Runs the refresh_all_data function periodically in a background thread."""
     print("Background refresh thread started.")
     while True:
-        # Wait *before* fetching to avoid immediate re-fetch after initial one
         time.sleep(REFRESH_INTERVAL_SECONDS)
         print(f"Background thread: Woke up, attempting refresh at {datetime.datetime.now()}")
         try:
             refresh_all_data()
             print(f"Background thread: Refresh cycle completed.")
         except Exception as e:
-            # Log error but continue the loop to retry later
             print(f"ERROR in background refresh loop: {e}")
             traceback.print_exc()
 
@@ -420,35 +413,31 @@ def draw_text_with_wrapping(draw, text, position, font, max_width, fill=COLOR_BL
     lines = []
     words = text.split()
     if not words:
-        return position[1]  # Return original Y if no text
+        return position[1]
 
     current_line = words[0]
     for word in words[1:]:
         try:
-            # Check width if word is added
             bbox = draw.textbbox((0, 0), f"{current_line} {word}", font=font)
             line_width = bbox[2] - bbox[0]
         except Exception as e:
-            # Fallback if textbbox fails (e.g., empty string, font issue)
             print(f"Warning: Error getting textbbox in draw_text_with_wrapping: {e}. Text: '{current_line} {word}'")
-            line_width = max_width + 1  # Force wrap
+            line_width = max_width + 1
 
         if line_width <= max_width:
             current_line = f"{current_line} {word}"
         else:
             lines.append(current_line)
             current_line = word
-    lines.append(current_line)  # Add the last line
+    lines.append(current_line)
 
     x, y = position
-    ascent, descent = font.getmetrics()  # Get reliable font metrics
+    ascent, descent = font.getmetrics()
     line_height = ascent + descent
-    # Draw each line, advancing Y position
     for line in lines:
         draw.text((x, y), line, font=font, fill=fill)
         y += line_height + LAYOUT_EVENT_LINE_SPACING_EXTRA
 
-    # Return Y position for the start of the *next* element
     return y - LAYOUT_EVENT_LINE_SPACING_EXTRA
 
 
@@ -466,13 +455,12 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, user_tz
     today_start = start_date_local
     today_end = today_start + datetime.timedelta(days=1)
     tomorrow_start = today_end
-    tomorrow_end = tomorrow_start + datetime.timedelta(days=1)  # Matches end_date_local
+    tomorrow_end = tomorrow_start + datetime.timedelta(days=1)
     print(f"Fetching calendar events from {today_start.strftime('%Y-%m-%d')} to {end_date_local.strftime('%Y-%m-%d')} for timezone {user_tz}")
 
     for url in caldav_urls:
         username, password, url_display_name = None, None, url
         try:
-            # Parse URL and extract credentials safely
             parsed_url = urllib.parse.urlparse(url)
             url_display_name = parsed_url.hostname or url
             if parsed_url.username:
@@ -490,23 +478,22 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, user_tz
                     continue
 
                 for calendar in calendars:
-                    # Apply calendar name filtering (case-insensitive)
                     calendar_name_lower = getattr(calendar, "name", "").lower()
                     if caldav_filters and calendar_name_lower not in caldav_filters:
-                        continue  # Skip calendar if filters active and name doesn't match
+                        continue
 
-                    # Fetch events, expand=True handles recurrence based on the server's interpretation
+                    # Fetch events, expand=True handles recurrence
                     results = calendar.date_search(start=start_date_local, end=end_date_local, expand=True)
 
                     for event in results:
-                        summary = "UNKNOWN_EVENT"  # Default summary
-                        ical_component = None  # Ensure defined scope for exception block
+                        summary = "UNKNOWN_EVENT"
+                        ical_component = None
                         try:
                             if not hasattr(event, "data") or not event.data:
-                                continue  # Skip if no event data
+                                continue
 
                             ics_data = event.data
-                            if isinstance(ics_data, bytes):  # Ensure data is string for from_ical
+                            if isinstance(ics_data, bytes):
                                 try:
                                     ics_data = ics_data.decode("utf-8")
                                 except UnicodeDecodeError:
@@ -514,7 +501,7 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, user_tz
 
                             cal = Calendar.from_ical(ics_data)
 
-                            # Robustly get the first VEVENT, handling list or iterator return from walk()
+                            # Robustly get the first VEVENT
                             vevent_components = cal.walk("VEVENT")
                             ical_component = None
                             if isinstance(vevent_components, list):
@@ -527,9 +514,8 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, user_tz
                                     print(f"      Warning: cal.walk('VEVENT') returned non-iterable type: {type(vevent_components)}.")
 
                             if not ical_component:
-                                continue  # Skip if no valid VEVENT found
+                                continue
 
-                            # Extract essential properties
                             summary_comp = ical_component.get("summary")
                             dtstart_comp = ical_component.get("dtstart")
                             if not summary_comp or not dtstart_comp:
@@ -537,25 +523,24 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, user_tz
                             summary = str(summary_comp)
                             original_start_time_obj = dtstart_comp.dt
 
-                            # Determine effective start time for this specific instance, handling recurrence
+                            # Determine effective start time for this instance
                             instance_start_time_obj = original_start_time_obj
                             recurrence_id_comp = ical_component.get("recurrence-id")
                             if recurrence_id_comp:
                                 recurrence_dt = recurrence_id_comp.dt
-                                if isinstance(recurrence_dt, datetime.datetime):  # Recurrence ID has time
+                                if isinstance(recurrence_dt, datetime.datetime):
                                     instance_start_time_obj = recurrence_dt
-                                elif isinstance(recurrence_dt, datetime.date):  # Recurrence ID is only a date
+                                elif isinstance(recurrence_dt, datetime.date):
                                     original_is_date_only = isinstance(original_start_time_obj, datetime.date) and not isinstance(
                                         original_start_time_obj, datetime.datetime
                                     )
-                                    if original_is_date_only:  # Original was all-day
+                                    if original_is_date_only:
                                         instance_start_time_obj = recurrence_dt
-                                    elif isinstance(original_start_time_obj, datetime.datetime):  # Original was timed
-                                        # Combine recurrence date with original time, preserving original TZ if any
+                                    elif isinstance(original_start_time_obj, datetime.datetime):
                                         instance_start_time_obj = datetime.datetime.combine(
                                             recurrence_dt, original_start_time_obj.time(), tzinfo=original_start_time_obj.tzinfo
                                         )
-                                    else:  # Fallback: combine recurrence date with midnight
+                                    else:
                                         instance_start_time_obj = datetime.datetime.combine(recurrence_dt, datetime.time.min)
 
                             # Determine if All Day & Localize Time
@@ -564,19 +549,17 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, user_tz
                             time_str = "??:??"
 
                             if is_all_day:
-                                # All-day events: create datetime at midnight in user's TZ for sorting/comparison
                                 naive_dt = datetime.datetime.combine(instance_start_time_obj, datetime.time.min)
                                 event_start_local = user_tz.localize(naive_dt)
                                 time_str = "All Day"
                             elif isinstance(instance_start_time_obj, datetime.datetime):
-                                # Timed events: convert aware times to user's TZ, assume naive times are in user's TZ
                                 if instance_start_time_obj.tzinfo:
                                     event_start_local = instance_start_time_obj.astimezone(user_tz)
                                 else:
                                     event_start_local = user_tz.localize(instance_start_time_obj)
                                 time_str = event_start_local.strftime("%H:%M")
                             else:
-                                continue  # Skip if type is unexpected
+                                continue
 
                             details = {"time": time_str, "title": summary, "sort_key": event_start_local}
 
@@ -603,12 +586,10 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, user_tz
                                         added_timed_tomorrow_keys.add(key)
 
                         except Exception as event_ex:
-                            # Ensure summary is somewhat identifiable even if error occurs early
                             current_summary = getattr(ical_component, "get", lambda k, d=None: d)("summary", summary)
                             print(f"      Error processing event '{current_summary}' (URL: {getattr(event, 'url', 'N/A')}): {event_ex}")
                             traceback.print_exc()
 
-        # Catch specific exceptions during calendar connection/fetching
         except caldav.lib.error.AuthorizationError:
             err_msg = f"Auth Fail: {url_display_name}"
             errors.append({"time": "ERR", "title": err_msg, "sort_key": today_start})
@@ -618,31 +599,31 @@ def fetch_calendar_events(caldav_urls, start_date_local, end_date_local, user_tz
         except requests.exceptions.ConnectionError:
             err_msg = f"Connect Fail: {url_display_name}"
             errors.append({"time": "ERR", "title": err_msg, "sort_key": today_start})
-        except Exception as cal_ex:  # Catch other potential CalDAV or parsing errors
+        except Exception as cal_ex:
             err_msg = f"Load Fail: {url_display_name}"
             print(f"  Error loading calendar {url_display_name}: {cal_ex}")
             traceback.print_exc()
             errors.append({"time": "ERR", "title": err_msg, "sort_key": today_start})
 
-    # Sort events: All-day alphabetically, timed by start time (sort_key)
+    # Sort events
     all_today.sort(key=lambda x: x["title"])
     timed_today.sort(key=lambda x: x["sort_key"])
     all_tomorrow.sort(key=lambda x: x["title"])
     timed_tomorrow.sort(key=lambda x: x["sort_key"])
 
-    # Combine errors, all-day, and timed events for each day (errors appear first in today's list)
+    # Combine results
     return errors + all_today + timed_today, all_tomorrow + timed_tomorrow
 
 
 def fetch_weather_data(location, timezone_str):
     """Fetches weather data from Open-Meteo API, returning dict or None on failure."""
     print(f"Fetching weather data for: '{location}', timezone: {timezone_str}")
-    weather_data = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1}  # Defaults
+    weather_data = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1}
     with requests.Session() as session:
         lat, lon = _fetch_lat_lon(location, session)
         if lat is None or lon is None:
             print(f"  Weather fetch failed for {location}: Could not get coordinates.")
-            return None  # Cannot proceed without coordinates
+            return None
 
         params = {
             "latitude": lat,
@@ -650,11 +631,11 @@ def fetch_weather_data(location, timezone_str):
             "timezone": timezone_str,
             "current": "temperature_2m,relative_humidity_2m,is_day,weather_code",
             "daily": "weather_code,temperature_2m_max,temperature_2m_min",
-            "forecast_days": 1,  # Only need today's daily forecast for high/low
+            "forecast_days": 1,
         }
         try:
             response = session.get(API_OPEN_METEO_FORECAST_URL, params=params, timeout=FETCH_WEATHER_TIMEOUT)
-            response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            response.raise_for_status()
             data = response.json()
 
             current, daily = data.get("current", {}), data.get("daily", {})
@@ -663,16 +644,15 @@ def fetch_weather_data(location, timezone_str):
                     "temp": current.get("temperature_2m"),
                     "humidity": current.get("relative_humidity_2m"),
                     "icon_code": current.get("weather_code", "unknown"),
-                    "is_day": current.get("is_day", 1),  # Default to day if missing
-                    "high": daily.get("temperature_2m_max", [None])[0],  # Daily data returns lists
+                    "is_day": current.get("is_day", 1),
+                    "high": daily.get("temperature_2m_max", [None])[0],
                     "low": daily.get("temperature_2m_min", [None])[0],
                 }
             )
 
-            # Fallback: Use daily weather code if current code is missing or unknown
             if weather_data["icon_code"] == "unknown" and daily.get("weather_code"):
                 daily_code = daily["weather_code"][0]
-                if daily_code is not None:  # Ensure daily code is not None
+                if daily_code is not None:
                     weather_data["icon_code"] = daily_code
                     print(f"  Using daily weather code ({daily_code}) as current code is unknown.")
 
@@ -683,28 +663,28 @@ def fetch_weather_data(location, timezone_str):
             print(f"Error: Open-Meteo forecast request for '{location}' timed out.")
         except requests.exceptions.RequestException as e:
             print(f"Error during Open-Meteo forecast request for '{location}': {e}")
-        except (KeyError, IndexError, ValueError) as e:  # Catch issues parsing JSON response
+        except (KeyError, IndexError, ValueError) as e:
             print(f"Error processing Open-Meteo forecast response for '{location}': {e}")
         except Exception as e:
             print(f"Unexpected error processing Open-Meteo forecast for '{location}': {e}")
             traceback.print_exc()
 
     print(f"  Weather fetch failed for {location} after encountering errors.")
-    return None  # Indicate failure
+    return None
 
 
 def generate_image(current_datetime_local, weather_info, today_events, tomorrow_events):
     """Generates the dashboard display image using helper functions for drawing sections."""
     print(f"Generating image for time: {current_datetime_local.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-    img_large = Image.new("L", (IMAGE_WIDTH, IMAGE_HEIGHT), color=COLOR_WHITE)  # Use direct constants
-    draw = ImageDraw.Draw(img_large)
+    img_display = Image.new("L", (IMAGE_WIDTH, IMAGE_HEIGHT), color=COLOR_WHITE)
+    draw = ImageDraw.Draw(img_display)
     fonts = LOADED_FONTS
 
     # --- Draw Left Pane ---
     time_bottom_y = _draw_time_section(draw, current_datetime_local, fonts, LAYOUT_LEFT_PANE_WIDTH, LAYOUT_PADDING)
     date_start_y = time_bottom_y + LAYOUT_TIME_DATE_SPACING
     _draw_date_section(draw, current_datetime_local, fonts, LAYOUT_LEFT_PANE_WIDTH, date_start_y)
-    weather_bottom_y = IMAGE_HEIGHT - LAYOUT_PADDING  # Align weather to bottom padding
+    weather_bottom_y = IMAGE_HEIGHT - LAYOUT_PADDING
     _draw_weather_section(draw, weather_info, fonts, LAYOUT_LEFT_PANE_WIDTH, weather_bottom_y)
 
     # --- Draw Right Pane ---
@@ -727,32 +707,28 @@ def generate_image(current_datetime_local, weather_info, today_events, tomorrow_
     draw.text((tmrw_head_x, header_y), "Tomorrow", font=header_font, fill=COLOR_BLACK)
 
     # Event Columns
-    event_y_start = header_y + header_h + (LAYOUT_EVENT_SPACING_AFTER * 2)  # Start below header
-    max_event_y = IMAGE_HEIGHT - LAYOUT_PADDING  # Don't draw past bottom padding
+    event_y_start = header_y + header_h + (LAYOUT_EVENT_SPACING_AFTER * 2)
+    max_event_y = IMAGE_HEIGHT - LAYOUT_PADDING
     _draw_event_column(draw, today_events, LAYOUT_LEFT_PANE_WIDTH, LAYOUT_COLUMN_WIDTH, event_y_start, fonts, max_event_y, current_datetime_local)
     _draw_event_column(draw, tomorrow_events, col_divider_x, LAYOUT_COLUMN_WIDTH, event_y_start, fonts, max_event_y)
 
-    # --- Downscale Image (No longer needed if IMAGE_RENDER_SCALE is 1) ---
-    # If you ever re-introduce scaling, the resize step would go here:
-    # img_final = img_large.resize((IMAGE_TARGET_WIDTH, IMAGE_TARGET_HEIGHT), Image.Resampling.LANCZOS)
-    img_final = img_large  # No scaling, use the rendered image directly
     print("Image generation complete.")
-    return img_final
+    return img_display
 
 
 def img_to_bytes(img):
     """Converts a PIL Image object to PNG image bytes in memory."""
     img_byte_arr = io.BytesIO()
     img.save(img_byte_arr, format="PNG")
-    img_byte_arr.seek(0)  # Rewind buffer for reading
+    img_byte_arr.seek(0)
     return img_byte_arr
 
 
 def refresh_all_data():
     """Fetches fresh weather and calendar data for ALL configured users."""
-    global APP_DATA  # Declare intent to modify global state
+    global APP_DATA
     print("Starting data refresh cycle for all users...")
-    new_data = {}  # Build new data in a temporary dict
+    new_data = {}
     start_time = time.time()
 
     for user_hash, config in USER_CONFIG.items():
@@ -761,31 +737,27 @@ def refresh_all_data():
         location = config["weather_location"]
         caldav_urls = config["caldav_urls"]
         caldav_filters = config.get("caldav_filters")
-        user_tz = config["timezone_obj"]  # Use pre-validated ZoneInfo object
+        user_tz = config["timezone_obj"]
 
-        # Fetch Weather Data (returns dict or None)
         weather_info = fetch_weather_data(location, timezone_str)
 
-        # Fetch Calendar Events for Today and Tomorrow
         now_local = datetime.datetime.now(user_tz)
         start_of_today = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_of_fetch_range = start_of_today + datetime.timedelta(days=2)  # Fetch up to end of tomorrow
+        end_of_fetch_range = start_of_today + datetime.timedelta(days=2)
         today_events, tomorrow_events = fetch_calendar_events(caldav_urls, start_of_today, end_of_fetch_range, user_tz, caldav_filters)
 
-        # Store fetched data for this user
         new_data[user_hash] = {
             "weather": weather_info,
             "today_events": today_events,
             "tomorrow_events": tomorrow_events,
-            "last_updated": time.time(),  # Record refresh time
-            "timezone_str": timezone_str,  # Store for reference
+            "last_updated": time.time(),
+            "timezone_str": timezone_str,
             "timezone_obj": user_tz,
         }
         print(f"  Finished fetching data for user: {user_hash}")
 
-    # Update Global State Safely
     with APP_DATA_LOCK:
-        APP_DATA = new_data  # Atomically replace old data
+        APP_DATA = new_data
         print("Global APP_DATA updated with new data.")
 
     end_time = time.time()
@@ -804,29 +776,26 @@ def display_image(user_hash):
         print(f"Request failed: User hash '{user_hash}' not found in configuration.")
         abort(404, description=f"User '{user_hash}' not found.")
 
-    # Get pre-fetched data from the global store (thread-safe)
     user_data = None
     with APP_DATA_LOCK:
         user_data = APP_DATA.get(user_hash)
 
     if not user_data:
         print(f"Request failed: Data not yet available for user '{user_hash}'. Initial refresh might be pending.")
-        abort(503, description="Data is being refreshed, please try again shortly.")  # 503 Service Unavailable
+        abort(503, description="Data is being refreshed, please try again shortly.")
 
-    weather_info = user_data.get("weather")  # Could be None if weather fetch failed
+    weather_info = user_data.get("weather")
     today_events = user_data.get("today_events", [])
     tomorrow_events = user_data.get("tomorrow_events", [])
     user_tz = user_data.get("timezone_obj")
     last_updated_ts = user_data.get("last_updated", 0)
 
-    if not user_tz:  # Should not happen if config loaded, but check defensively
+    if not user_tz:
         print(f"Internal Server Error: Timezone object missing for user '{user_hash}'.")
         abort(500, description="Internal server error: User timezone configuration issue.")
 
-    # Get the current time in the user's specific timezone for display generation
     now_user_tz = datetime.datetime.now(user_tz)
 
-    # Generate the image using the fetched data and current time
     try:
         img_obj = generate_image(now_user_tz, weather_info, today_events, tomorrow_events)
         img_bytes_io = img_to_bytes(img_obj)
@@ -835,22 +804,15 @@ def display_image(user_hash):
         traceback.print_exc()
         abort(500, description="Failed to generate display image due to an internal error.")
 
-    # Return the image as a Flask response
     update_time_str = datetime.datetime.fromtimestamp(last_updated_ts).strftime("%Y-%m-%d %H:%M:%S")
     print(f"Successfully generated and sending image for user '{user_hash}'. Data last updated: {update_time_str}")
-    return send_file(
-        img_bytes_io,
-        mimetype="image/png",
-        as_attachment=False,  # Display inline in browser
-        download_name=f"display_{user_hash}.png",  # Suggested filename if saved
-    )
+    return send_file(img_bytes_io, mimetype="image/png", as_attachment=False, download_name=f"display_{user_hash}.png")
 
 
 # ==============================================================================
 # Initial Data Fetch & Background Task Start
 # ==============================================================================
 if USER_CONFIG:
-    # Perform an initial data fetch before starting the server
     print("Performing initial data fetch before starting server...")
     try:
         refresh_all_data()
@@ -860,7 +822,6 @@ if USER_CONFIG:
         print("Server will start, but data might be unavailable until the first background refresh.")
         traceback.print_exc()
 
-    # Start the background refresh thread (only if users are configured)
     refresh_thread = threading.Thread(target=background_refresh_loop, daemon=True)
     refresh_thread.start()
     print("Background data refresh thread started.")
@@ -874,13 +835,9 @@ else:
 # Main Execution Block (for direct script running / debugging)
 # ==============================================================================
 if __name__ == "__main__":
-    # Use Flask's development server for debugging.
-    # For production, use a WSGI server like Gunicorn.
     print("-" * 60)
     print("Starting Flask development server (for debugging)...")
     print(f"Access the display at: http://<your-ip>:5050/display/<user_hash>")
     print("Use a WSGI server (e.g., Gunicorn) for production deployments.")
     print("-" * 60)
-    # debug=True enables debugger and verbose logs.
-    # use_reloader=True restarts server on code changes (requires 'watchdog' for reliability with threads).
     app.run(host="0.0.0.0", port=5050, debug=True, use_reloader=True)
