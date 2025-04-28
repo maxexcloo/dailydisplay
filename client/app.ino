@@ -36,8 +36,8 @@ const int SCREEN_HEIGHT = 540;
 const int TEXT_MARGIN_X = 10;
 const int TEXT_MARGIN_Y = 10;
 const int HTTP_TIMEOUT_MS = 30 * 1000;         // 30 seconds
+const int WIFI_CONNECT_RETRIES = 3;            // Number of connection attempts before giving up
 const int WIFI_CONNECT_TIMEOUT_MS = 30 * 1000; // 30 seconds
-const int MAX_WIFI_RETRIES = 3;                // Number of connection attempts before giving up
 
 // ==============================================================================
 // Global Objects & Buffers
@@ -82,7 +82,7 @@ bool connectWifi()
       displayTextMessage("WiFi Connect Failed\n(Timeout)");
 
       // If we've tried multiple times, give up
-      if (++retries >= MAX_WIFI_RETRIES)
+      if (++retries >= WIFI_CONNECT_RETRIES)
       {
         return false;
       }
