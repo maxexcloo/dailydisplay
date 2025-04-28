@@ -37,6 +37,7 @@ const int TEXT_MARGIN_X = 10;
 const int TEXT_MARGIN_Y = 10;
 const int HTTP_TIMEOUT_MS = 30 * 1000;         // 30 seconds
 const int WIFI_CONNECT_TIMEOUT_MS = 30 * 1000; // 30 seconds
+const int MAX_WIFI_RETRIES = 3;                // Number of connection attempts before giving up
 
 // ==============================================================================
 // Global Objects & Buffers
@@ -57,12 +58,19 @@ uint16_t png_callback_rgb565_buffer[SCREEN_WIDTH]; // Global buffer for PNG call
  */
 bool connectWifi()
 {
+  // Don't try to reconnect if already connected
+  if (WiFi.status() == WL_CONNECTED)
+  {
+    return true;
+  }
+
   displayTextMessage("Connecting to WiFi:\n" + String(ssid));
   Serial.printf("Connecting to WiFi: %s ", ssid);
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
 
+  int retries = 0;
   unsigned long startMillis = millis();
   while (WiFi.status() != WL_CONNECTED)
   {
@@ -72,7 +80,19 @@ bool connectWifi()
     {
       Serial.println("\nFailed to connect to WiFi (Timeout).");
       displayTextMessage("WiFi Connect Failed\n(Timeout)");
-      return false;
+
+      // If we've tried multiple times, give up
+      if (++retries >= MAX_WIFI_RETRIES)
+      {
+        return false;
+      }
+
+      // Otherwise try again
+      Serial.println("Retrying connection...");
+      WiFi.disconnect();
+      delay(1000);
+      WiFi.begin(ssid, password);
+      startMillis = millis();
     }
   }
   Serial.println("\nWiFi connected successfully.");
@@ -111,6 +131,32 @@ void displayTextMessage(const String &message)
 }
 
 /**
+ * @brief Check if WiFi is connected and attempt to reconnect if needed
+ * @return true if connected, false if connection failed
+ */
+bool ensureWiFiConnected()
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("WiFi connection lost. Attempting to reconnect...");
+    return connectWifi();
+  }
+  return true;
+}
+
+/**
+ * @brief Safely frees the PNG buffer if allocated
+ */
+void freePngBuffer()
+{
+  if (png_buffer)
+  {
+    free(png_buffer);
+    png_buffer = nullptr;
+  }
+}
+
+/**
  * @brief PNG Decoder Callback: Converts RGB565 line to 4bpp grayscale
  * and writes directly into the epaper buffer.
  */
@@ -119,6 +165,13 @@ void pngDrawCallback(PNGDRAW *pDraw)
   uint8_t *pBuffer = epaper.currentBuffer();
   if (!pBuffer)
     return;
+
+  // Validate dimensions
+  if (pDraw->iWidth > SCREEN_WIDTH || pDraw->y >= SCREEN_HEIGHT)
+  {
+    Serial.printf("PNG dimensions out of bounds: width=%d, y=%d\n", pDraw->iWidth, pDraw->y);
+    return;
+  }
 
   const int BITMAP_PITCH = SCREEN_WIDTH / 2; // Bytes per row for 4bpp buffer
 
@@ -161,14 +214,12 @@ void pngDrawCallback(PNGDRAW *pDraw)
 bool updateDisplay()
 {
   bool success = false;
-  unsigned long currentMillis = millis();
+  unsigned long currentTime = millis(); // Capture current time once
 
-  if (WiFi.status() != WL_CONNECTED)
+  // Make sure we're connected before proceeding
+  if (!ensureWiFiConnected())
   {
-    if (!connectWifi())
-    {
-      return false; // Message shown in connectWifi
-    }
+    return false;
   }
 
   HTTPClient http;
@@ -182,12 +233,14 @@ bool updateDisplay()
     if (len <= 0)
     {
       Serial.println("Error: Content length is 0 or unknown.");
+      displayTextMessage("Error: Empty content");
       http.end();
       return false;
     }
 
-    if (png_buffer)
-      free(png_buffer);
+    // Always free the buffer before allocating new memory
+    freePngBuffer();
+
     png_buffer = (uint8_t *)heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
 
     if (!png_buffer)
@@ -197,7 +250,8 @@ bool updateDisplay()
 
     if (!png_buffer)
     {
-      Serial.println("Error: Failed to allocate memory for PNG buffer.");
+      Serial.printf("Error: Failed to allocate %d bytes for PNG buffer.\n", len);
+      displayTextMessage("Error: Memory allocation failed");
       http.end();
       return false;
     }
@@ -209,12 +263,8 @@ bool updateDisplay()
     if (bytes_read != len)
     {
       Serial.printf("Error: PNG download incomplete. Read %d / %d bytes.\n", bytes_read, len);
-      if (png_buffer)
-      {
-        free(png_buffer);
-        png_buffer = nullptr;
-      }
-
+      displayTextMessage("Error: PNG download incomplete");
+      freePngBuffer();
       return false;
     }
 
@@ -229,11 +279,26 @@ bool updateDisplay()
       {
         Serial.println("PNG decoded successfully.");
 
-        if (currentMillis - lastFullRefreshMillis >= FULL_REFRESH_INTERVAL_MS || lastFullRefreshMillis == 0)
+        // Handle the millis() overflow case (occurs after ~49 days)
+        bool isFullRefresh = false;
+
+        // Check if lastFullRefreshMillis is greater than currentTime (overflow occurred)
+        if (lastFullRefreshMillis > currentTime)
+        {
+          isFullRefresh = true;
+        }
+        // Normal case - check if enough time has passed for full refresh
+        else if ((currentTime - lastFullRefreshMillis >= FULL_REFRESH_INTERVAL_MS) ||
+                 (lastFullRefreshMillis == 0))
+        {
+          isFullRefresh = true;
+        }
+
+        if (isFullRefresh)
         {
           Serial.println("Initiating FULL screen update...");
           epaper.fullUpdate(false);
-          lastFullRefreshMillis = currentMillis; // Reset full refresh timer *after* update
+          lastFullRefreshMillis = currentTime; // Reset full refresh timer *after* update
         }
         else
         {
@@ -246,22 +311,21 @@ bool updateDisplay()
       else
       {
         Serial.printf("Error: PNG decode failed. Code: %d\n", rc);
+        displayTextMessage("Error: PNG decode failed\nCode: " + String(rc));
       }
     }
     else
     {
       Serial.printf("Error: PNG open failed. Code: %d\n", rc);
+      displayTextMessage("Error: PNG open failed\nCode: " + String(rc));
     }
 
-    if (png_buffer)
-    {
-      free(png_buffer);
-      png_buffer = nullptr;
-    }
+    freePngBuffer(); // Always free the buffer after use
   }
   else
   {
     Serial.printf("HTTP request failed. Error: %s (Code: %d)\n", http.errorToString(httpCode).c_str(), httpCode);
+    displayTextMessage("HTTP request failed\nCode: " + String(httpCode));
     http.end(); // Ensure http client is ended on error too
   }
 
@@ -284,17 +348,13 @@ void setup()
 
   if (!connectWifi())
   {
-    Serial.println("Initial WiFi connection failed. Halting.");
-    while (1)
-    {
-      delay(100);
-    } // Halt with small delay
+    Serial.println("Initial WiFi connection failed. Will retry in main loop.");
+    displayTextMessage("WiFi connection failed.\nWill retry in main loop.");
   }
-
-  if (!updateDisplay())
+  else if (!updateDisplay())
   {
     Serial.println("Initial display update failed.");
-    displayTextMessage("Initial data fetch failed."); // Show error if first fetch fails
+    displayTextMessage("Initial data fetch failed.\nWill retry in main loop.");
   }
 
   // Initialize timers after first attempt
@@ -306,10 +366,20 @@ void setup()
 
 void loop()
 {
-  unsigned long currentMillis = millis();
-  if (currentMillis - lastRefreshMillis >= REFRESH_INTERVAL_MS)
+  unsigned long currentTime = millis();
+
+  // Handle millis() overflow (occurs after ~49 days)
+  if (lastRefreshMillis > currentTime)
   {
-    lastRefreshMillis = currentMillis;
+    // Overflow occurred, reset timers
+    lastRefreshMillis = currentTime;
+    lastFullRefreshMillis = currentTime;
+    Serial.println("millis() overflow detected, resetting timers");
+  }
+
+  if (currentTime - lastRefreshMillis >= REFRESH_INTERVAL_MS)
+  {
+    lastRefreshMillis = currentTime;
     if (!updateDisplay())
     { // Attempt the update
       Serial.println("Update failed, will retry on next interval.");
