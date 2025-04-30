@@ -203,7 +203,7 @@ def _process_event_data(ics_data_str, user_tz):
     """Parses ICS data, extracts VEVENT details, localizes time."""
     try:
         cal = Calendar.from_ical(ics_data_str)
-        ical_component = next(cal.walk("VEVENT"), None)
+        ical_component = next(iter(cal.walk("VEVENT")), None)
         if not ical_component:
             return None, None
 
@@ -236,7 +236,10 @@ def _process_event_data(ics_data_str, user_tz):
         return details, is_all_day
 
     except Exception as e:
-        print(f"        Error parsing single event data: {e}")
+        if "object is not an iterator" in str(e):
+            print(f"        Error parsing single event data (Iterator Issue): {e}")
+        else:
+            print(f"        Error parsing single event data: {e}")
         return None, None
 
 
