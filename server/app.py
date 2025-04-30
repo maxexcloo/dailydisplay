@@ -13,6 +13,7 @@
 # ///
 
 import datetime
+import json
 import os
 import threading
 import time
@@ -36,23 +37,17 @@ print("Attempted to load configuration from .env file (if present).")
 # ==============================================================================
 # Configuration Constants
 # ==============================================================================
-
-# --- API URLs ---
 API_OPEN_METEO_FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 API_OPEN_METEO_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 
-# --- Data Fetching & Background Task ---
 FETCH_CALDAV_TIMEOUT = 30
 FETCH_WEATHER_TIMEOUT = 15
 REFRESH_INTERVAL_SECONDS = 60
 
-# --- PNG Rendering ---
 PNG_VIEWPORT_WIDTH = 960
 PNG_VIEWPORT_HEIGHT = 540
 PNG_TIMEOUT = 30000
 
-# --- Weather Icon Mapping ---
-# Ref: https://erikflowers.github.io/weather-icons/ & https://open-meteo.com/en/docs#weathervariables
 WEATHER_ICON_CLASS_MAP_DAY = {
     0: "wi-day-sunny",
     1: "wi-day-cloudy",
@@ -89,6 +84,8 @@ WEATHER_ICON_CLASS_MAP_NIGHT = {
     1: "wi-night-alt-cloudy",
     2: "wi-night-alt-cloudy-gusts",
     3: "wi-night-cloudy",
+    45: "wi-fog",
+    48: "wi-fog",
     51: "wi-night-alt-sprinkle",
     53: "wi-night-alt-sprinkle",
     55: "wi-night-alt-showers",
@@ -96,11 +93,19 @@ WEATHER_ICON_CLASS_MAP_NIGHT = {
     57: "wi-night-alt-sleet",
     61: "wi-night-alt-rain",
     66: "wi-night-alt-sleet",
+    67: "wi-sleet",
     71: "wi-night-alt-snow",
+    73: "wi-snow",
+    75: "wi-snow-wind",
+    77: "wi-snow",
     80: "wi-night-alt-showers",
+    81: "wi-showers",
+    82: "wi-thunderstorm",
     85: "wi-night-alt-snow",
+    86: "wi-snow",
     95: "wi-night-alt-thunderstorm",
     96: "wi-night-alt-hail",
+    99: "wi-storm-showers",
     "unknown": "wi-na",
 }
 
@@ -118,61 +123,56 @@ PNG_CACHE_LOCK = threading.Lock()
 # ==============================================================================
 USER_CONFIG = {}
 try:
-    USER_HASHES_STR = os.environ.get("USER_HASHES", "")
-    if not USER_HASHES_STR:
-        print("Warning: USER_HASHES environment variable not set or empty.")
+    config_json_str = os.environ.get("CONFIG")
+    if not config_json_str:
+        print("Warning: CONFIG environment variable not set or empty.")
     else:
-        for user_hash in USER_HASHES_STR.split(","):
+        print("Loading configuration from CONFIG environment variable (JSON)...")
+        config_data = json.loads(config_json_str)
+        if not isinstance(config_data, dict):
+            raise ValueError("CONFIG JSON must be a dictionary")
+
+        for user_hash, user_settings in config_data.items():
             user_hash = user_hash.strip()
-            if not user_hash:
+            if not user_hash or not isinstance(user_settings, dict):
+                print(f"  Warning: Skipping invalid entry: {user_hash}")
                 continue
 
-            caldav_filter_var = f"CALDAV_FILTER_NAMES_{user_hash}"
-            caldav_urls_var = f"CALDAV_URLS_{user_hash}"
-            tz_var = f"TIMEZONE_{user_hash}"
-            weather_loc_var = f"WEATHER_LOCATION_{user_hash}"
-
-            caldav_filter_str = os.environ.get(caldav_filter_var)
-            caldav_urls_str = os.environ.get(caldav_urls_var, "")
-            tz_str = os.environ.get(tz_var)
-            weather_loc = os.environ.get(weather_loc_var)
-
-            if not weather_loc:
-                raise ValueError(f"Missing configuration: {weather_loc_var}")
-            if not tz_str:
-                raise ValueError(f"Missing configuration: {tz_var}")
-
             try:
+                tz_str = user_settings["timezone"]
+                weather_loc = user_settings["weather_location"]
                 user_tz = ZoneInfo(tz_str)
-            except ZoneInfoNotFoundError:
-                raise ValueError(f"Invalid timezone '{tz_str}' in {tz_var}")
+                caldav_urls_str = user_settings.get("caldav_urls", "")
+                caldav_filter_str = user_settings.get("caldav_filter_names")
+                caldav_urls = [url.strip() for url in caldav_urls_str.split(",") if url.strip()]
+                caldav_filters = {name.strip().lower() for name in caldav_filter_str.split(",")} if caldav_filter_str else None
 
-            caldav_urls = [url.strip() for url in caldav_urls_str.split(",") if url.strip()]
-            caldav_filters = {name.strip().lower() for name in caldav_filter_str.split(",")} if caldav_filter_str else None
+                USER_CONFIG[user_hash] = {
+                    "caldav_filters": caldav_filters,
+                    "caldav_urls": caldav_urls,
+                    "timezone": tz_str,
+                    "timezone_obj": user_tz,
+                    "weather_location": weather_loc,
+                }
+                print(f"Loaded config for user '{user_hash}'")
 
-            USER_CONFIG[user_hash] = {
-                "caldav_filters": caldav_filters,
-                "caldav_urls": caldav_urls,
-                "timezone": tz_str,
-                "timezone_obj": user_tz,
-                "weather_location": weather_loc,
-            }
-            filter_msg = f"Yes: {', '.join(caldav_filters)}" if caldav_filters else "No"
-            print(f"Loaded config for user '{user_hash}': TZ={tz_str}, Loc={weather_loc}, URLs={len(caldav_urls)}, Filters={filter_msg}")
+            except (KeyError, ValueError, ZoneInfoNotFoundError) as e:
+                print(f"  Configuration Error for user '{user_hash}': {e}. Skipping.")
+            except Exception as e:
+                print(f"  Unexpected error loading configuration for user '{user_hash}': {e}")
+                traceback.print_exc()
+                print(f"  Skipping user '{user_hash}'.")
 
-except ValueError as e:
-    print(f"Configuration Error: {e}")
-    raise
+except (json.JSONDecodeError, ValueError) as e:
+    print(f"Configuration Error: Invalid JSON or structure in CONFIG: {e}")
+    raise RuntimeError("Failed to parse JSON configuration") from e
 except Exception as e:
-    print(f"Unexpected error loading user configuration: {e}")
+    print(f"Fatal error during configuration loading: {e}")
     traceback.print_exc()
     raise RuntimeError("Failed to load user configuration") from e
 
-if not USER_CONFIG and USER_HASHES_STR:
-    print("Error: USER_HASHES is set, but no valid user configurations could be loaded.")
-    raise RuntimeError("Failed to load any valid user configurations.")
-elif not USER_CONFIG:
-    print("Warning: No users configured.")
+if not USER_CONFIG:
+    print("Warning: No valid user configurations loaded.")
 
 # ==============================================================================
 # Helper Function Definitions
@@ -191,32 +191,19 @@ def _fetch_lat_lon(location_name, session):
             lat, lon = result.get("latitude"), result.get("longitude")
             if isinstance(lat, (int, float)) and isinstance(lon, (int, float)):
                 return lat, lon
-            else:
-                print(f"Warning: Geocoding for '{location_name}' returned invalid lat/lon types: {lat}, {lon}")
-        else:
-            print(f"Warning: Geocoding failed for '{location_name}'. No results found.")
-    except requests.exceptions.Timeout:
-        print(f"Error: Geocoding request for '{location_name}' timed out.")
+        print(f"Warning: Geocoding failed or returned invalid data for '{location_name}'.")
     except requests.exceptions.RequestException as e:
         print(f"Error during geocoding request for '{location_name}': {e}")
-    except (KeyError, IndexError, ValueError) as e:
-        print(f"Error processing geocoding response for '{location_name}': {e}")
     except Exception as e:
         print(f"Unexpected error during geocoding for '{location_name}': {e}")
-        traceback.print_exc()
     return None, None
 
 
 def _process_event_data(ics_data_str, user_tz):
-    """
-    Parses ICS data, extracts VEVENT details, localizes time.
-    Returns (details_dict, is_all_day_flag) or (None, None) on failure.
-    """
+    """Parses ICS data, extracts VEVENT details, localizes time."""
     try:
         cal = Calendar.from_ical(ics_data_str)
-        components = cal.walk("VEVENT")
-        ical_component = next(iter(components), None)
-
+        ical_component = next(cal.walk("VEVENT"), None)
         if not ical_component:
             return None, None
 
@@ -230,16 +217,14 @@ def _process_event_data(ics_data_str, user_tz):
 
         is_all_day = isinstance(instance_start_time_obj, datetime.date) and not isinstance(instance_start_time_obj, datetime.datetime)
         event_start_local = None
-        time_str = "??:??"
+        time_str = "ERR"
 
         if is_all_day:
             naive_dt = datetime.datetime.combine(instance_start_time_obj, datetime.time.min)
             event_start_local = user_tz.localize(naive_dt) if naive_dt.tzinfo is None else naive_dt.astimezone(user_tz)
             time_str = "All Day"
         elif isinstance(instance_start_time_obj, datetime.datetime):
-            event_start_local = (
-                user_tz.localize(instance_start_time_obj) if instance_start_time_obj.tzinfo is None else instance_start_time_obj.astimezone(user_tz)
-            )
+            event_start_local = instance_start_time_obj.astimezone(user_tz) if instance_start_time_obj.tzinfo else user_tz.localize(instance_start_time_obj)
             time_str = event_start_local.strftime("%H:%M")
         else:
             return None, None
@@ -251,7 +236,7 @@ def _process_event_data(ics_data_str, user_tz):
         return details, is_all_day
 
     except Exception as e:
-        print(f"        Error parsing/processing single event data: {e}")
+        print(f"        Error parsing single event data: {e}")
         return None, None
 
 
@@ -259,14 +244,12 @@ def _regenerate_all_pngs(hashes_to_render):
     """Iterates through specified users and regenerates their cached PNGs using Playwright."""
     global PNG_CACHE
     if not hashes_to_render:
-        print("  No users marked for PNG regeneration.")
         return
 
     print(f"  Starting PNG cache regeneration for {len(hashes_to_render)} users...")
     start_png_time = time.time()
     generated_count = 0
     failed_count = 0
-
     browser = None
     try:
         with sync_playwright() as p:
@@ -276,26 +259,24 @@ def _regenerate_all_pngs(hashes_to_render):
 
             for user_hash in hashes_to_render:
                 user_data_copy = None
-                template_context = None
                 with APP_DATA_LOCK:
-                    if user_hash in APP_DATA:
-                        user_data_copy = APP_DATA[user_hash].copy()
+                    user_data_copy = APP_DATA.get(user_hash, {}).copy()
 
-                if not user_data_copy:
-                    print(f"    Skipping PNG render for {user_hash}, data check failed post-lock.")
+                if not user_data_copy or "timezone_obj" not in user_data_copy:
+                    print(f"    Skipping PNG render for {user_hash}, data missing.")
                     failed_count += 1
                     continue
 
                 try:
                     user_tz = user_data_copy["timezone_obj"]
                     now_user_tz = datetime.datetime.now(user_tz)
+                    last_updated_ts = user_data_copy.get("last_updated", 0)
+                    last_updated_dt = datetime.datetime.fromtimestamp(last_updated_ts, tz=datetime.UTC).astimezone(user_tz)
                     template_context = {
                         "user_hash": user_hash,
                         "current_date_str": now_user_tz.strftime("%a, %d %b"),
                         "current_time_str": now_user_tz.strftime("%H:%M"),
-                        "last_updated_str": datetime.datetime.fromtimestamp(user_data_copy.get("last_updated", 0), tz=datetime.UTC)
-                        .astimezone(user_tz)
-                        .strftime("%Y-%m-%d %H:%M:%S %Z"),
+                        "last_updated_str": last_updated_dt.strftime("%Y-%m-%d %H:%M:%S %Z"),
                         "now_local": now_user_tz,
                         "refresh_interval": REFRESH_INTERVAL_SECONDS,
                         "today_events": user_data_copy.get("today_events", []),
@@ -316,40 +297,33 @@ def _regenerate_all_pngs(hashes_to_render):
                     failed_count += 1
 
             browser.close()
-    except Exception as e:
-        print(f"  FATAL Error during Playwright PNG regeneration process: {e}")
+    except (PlaywrightError, Exception) as e:
+        print(f"  FATAL Playwright/PNG Error: {e}")
         traceback.print_exc()
         failed_count = len(hashes_to_render)
     finally:
         if browser and browser.is_connected():
-            print("  Ensuring Playwright browser is closed after regeneration cycle.")
-            browser.close()
+            try:
+                browser.close()
+            except Exception as close_err:
+                print(f"    Error closing browser: {close_err}")
 
     end_png_time = time.time()
-    print(f"  PNG cache regeneration finished. Generated: {generated_count}, Failed: {failed_count}. Duration: {end_png_time - start_png_time:.2f} seconds.")
+    print(f"  PNG regeneration finished. Generated: {generated_count}, Failed: {failed_count}. Duration: {end_png_time - start_png_time:.2f}s.")
 
 
 def _render_png_for_hash(user_hash, page, template_context):
     """Helper to render PNG for a specific hash using Playwright page.set_content()."""
-    png_bytes = None
     try:
-        print(f"    Rendering template to HTML string for {user_hash}...")
         with app.app_context():
             html_string = render_template("index.html", **template_context)
-
-        print(f"    Setting page content for {user_hash}...")
-        page.set_content(html_string, wait_until="load", timeout=PNG_TIMEOUT)
-
-        print(f"    Taking screenshot for {user_hash}...")
+        page.set_content(html_string, wait_until="networkidle", timeout=PNG_TIMEOUT)
         png_bytes = page.screenshot(type="png")
-        print(f"    Successfully rendered PNG for {user_hash}")
-
-    except PlaywrightError as e:
-        print(f"    Playwright Error generating PNG for {user_hash}: {e}")
-    except Exception as e:
-        print(f"    Unexpected Error generating PNG for {user_hash}: {e}")
-        traceback.print_exc()
-    return png_bytes
+        print(f"    Rendered PNG for {user_hash}")
+        return png_bytes
+    except (PlaywrightError, Exception) as e:
+        print(f"    Error generating PNG for {user_hash}: {e}")
+    return None
 
 
 def background_refresh_loop():
@@ -357,12 +331,13 @@ def background_refresh_loop():
     print("Background refresh thread started.")
     while True:
         time.sleep(REFRESH_INTERVAL_SECONDS)
-        print(f"Background thread: Woke up, attempting refresh at {datetime.datetime.now(datetime.UTC)}")
+        print(f"Background thread: Refreshing data at {datetime.datetime.now(datetime.UTC)}")
         try:
             refresh_all_data()
         except Exception as e:
             print(f"ERROR in background refresh loop: {e}")
             traceback.print_exc()
+            time.sleep(15)
 
 
 # ==============================================================================
@@ -374,78 +349,60 @@ def background_refresh_loop():
 def display_page(user_hash):
     """Flask route to render the display page for a specific user."""
     if user_hash not in USER_CONFIG:
-        print(f"Request failed for HTML: User hash '{user_hash}' not found in configuration.")
         abort(404, description=f"User '{user_hash}' not found.")
 
-    user_data = None
     with APP_DATA_LOCK:
         user_data = APP_DATA.get(user_hash, {}).copy()
 
-    if not user_data or "timezone_obj" not in user_data:
-        print(f"Request failed for HTML: Data not yet available for user '{user_hash}'.")
-        abort(503, description="Data is being refreshed or is not yet available, please try again shortly.")
-
-    weather_info = user_data.get("weather", {})
-    today_events = user_data.get("today_events", [])
-    tomorrow_events = user_data.get("tomorrow_events", [])
-    user_tz = user_data.get("timezone_obj")
-    last_updated_ts = user_data.get("last_updated", 0)
-    now_user_tz = datetime.datetime.now(user_tz)
-    current_time_str = now_user_tz.strftime("%H:%M")
-    current_date_str = now_user_tz.strftime("%a, %d %b")
-    last_updated_dt = datetime.datetime.fromtimestamp(last_updated_ts, tz=datetime.UTC).astimezone(user_tz)
-    last_updated_str = last_updated_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
-    print(f"Rendering HTML page for user '{user_hash}'. Data last updated: {last_updated_str}")
+    if not user_data or "timezone_obj" not in user_data or "last_updated" not in user_data:
+        status = 503 if user_hash in USER_CONFIG else 404
+        description = "Data unavailable, please try again shortly." if status == 503 else f"User '{user_hash}' not configured."
+        abort(status, description=description)
 
     try:
+        user_tz = user_data["timezone_obj"]
+        now_user_tz = datetime.datetime.now(user_tz)
+        last_updated_dt = datetime.datetime.fromtimestamp(user_data["last_updated"], tz=datetime.UTC).astimezone(user_tz)
+
         return render_template(
             "index.html",
-            current_date_str=current_date_str,
-            current_time_str=current_time_str,
-            last_updated_str=last_updated_str,
+            current_date_str=now_user_tz.strftime("%a, %d %b"),
+            current_time_str=now_user_tz.strftime("%H:%M"),
+            last_updated_str=last_updated_dt.strftime("%Y-%m-%d %H:%M:%S %Z"),
             now_local=now_user_tz,
             refresh_interval=REFRESH_INTERVAL_SECONDS,
-            today_events=today_events,
-            tomorrow_events=tomorrow_events,
+            today_events=user_data.get("today_events", []),
+            tomorrow_events=user_data.get("tomorrow_events", []),
             user_hash=user_hash,
-            weather_info=weather_info,
+            weather_info=user_data.get("weather", {}),
         )
     except Exception as e:
         print(f"Error during template rendering for user '{user_hash}': {e}")
         traceback.print_exc()
-        abort(500, description="Failed to render display page due to an internal error.")
+        abort(500, description="Internal error rendering display page.")
 
 
 @app.route("/<user_hash>.png")
 def display_page_png(user_hash):
     """Flask route to serve the proactively cached PNG image."""
     if user_hash not in USER_CONFIG:
-        print(f"Request failed for PNG: User hash '{user_hash}' not found.")
         abort(404, description=f"User '{user_hash}' not found.")
 
-    png_bytes = None
     with PNG_CACHE_LOCK:
         png_bytes = PNG_CACHE.get(user_hash)
 
     if png_bytes:
         return Response(png_bytes, mimetype="image/png")
     else:
-        print(f"Request failed for PNG: Cached image not available for user '{user_hash}'.")
-        data_exists = False
         with APP_DATA_LOCK:
-            data_exists = user_hash in APP_DATA
-
-        if data_exists:
-            abort(500, description="PNG image is currently unavailable due to a rendering error.")
-        else:
-            abort(503, description="Data and PNG image are being generated, please try again shortly.")
+            data_exists = user_hash in APP_DATA and APP_DATA[user_hash]
+        status = 500 if data_exists else 503
+        description = "PNG unavailable (rendering error?)." if status == 500 else "Data/PNG unavailable, please try again shortly."
+        abort(status, description=description)
 
 
-def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local_unused, start_date_local, user_tz):
-    """
-    Fetches and processes calendar events from CalDAV URLs for today and tomorrow
-    using separate searches and a helper function for processing.
-    """
+def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz):
+    """Fetches and processes calendar events from CalDAV URLs for today and tomorrow."""
     all_today, timed_today, all_tomorrow, timed_tomorrow, errors = [], [], [], [], []
     added_all_today_titles, added_timed_today_keys = set(), set()
     added_all_tomorrow_titles, added_timed_tomorrow_keys = set(), set()
@@ -455,11 +412,14 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local_unused, st
     tomorrow_start = today_end
     tomorrow_end = tomorrow_start + datetime.timedelta(days=1)
 
+    if not caldav_urls:
+        return [], []
+
     for url in caldav_urls:
         username, password, url_display_name = None, None, url
         try:
             parsed_url = urllib.parse.urlparse(url)
-            url_display_name = parsed_url.hostname or url
+            url_display_name = parsed_url.hostname if parsed_url.hostname else url
             username = urllib.parse.unquote(parsed_url.username) if parsed_url.username else None
             password = urllib.parse.unquote(parsed_url.password) if parsed_url.password else None
             url_no_creds = parsed_url._replace(netloc=parsed_url.hostname + (f":{parsed_url.port}" if parsed_url.port else "")).geturl()
@@ -471,8 +431,12 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local_unused, st
                     continue
 
                 for calendar in calendars:
-                    calendar_name = getattr(calendar, "name", "UnknownCalendarName")
+                    try:
+                        calendar_name = calendar.name or "Unknown"
+                    except Exception:
+                        calendar_name = "Unknown(Err)"
                     calendar_name_lower = calendar_name.lower()
+
                     if caldav_filters and calendar_name_lower not in caldav_filters:
                         continue
 
@@ -487,21 +451,21 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local_unused, st
                                     ics_data = ics_data.decode("utf-8")
                                 except UnicodeDecodeError:
                                     ics_data = ics_data.decode("latin-1", errors="replace")
+
                             details, is_all_day = _process_event_data(ics_data, user_tz)
-                            if details and details.get("sort_key"):
-                                if today_start <= details["sort_key"] < today_end:
-                                    summary = details["title"]
-                                    if is_all_day:
-                                        if summary not in added_all_today_titles:
-                                            all_today.append(details)
-                                            added_all_today_titles.add(summary)
-                                    else:
-                                        key = (details["time"], summary)
-                                        if key not in added_timed_today_keys:
-                                            timed_today.append(details)
-                                            added_timed_today_keys.add(key)
-                    except Exception as search_ex_today:
-                        print(f"      Error searching calendar '{calendar_name}' for TODAY: {search_ex_today}")
+                            if details and details.get("sort_key") and today_start <= details["sort_key"] < today_end:
+                                summary = details["title"]
+                                if is_all_day:
+                                    if summary not in added_all_today_titles:
+                                        all_today.append(details)
+                                        added_all_today_titles.add(summary)
+                                else:
+                                    key = (details["time"], summary)
+                                    if key not in added_timed_today_keys:
+                                        timed_today.append(details)
+                                        added_timed_today_keys.add(key)
+                    except Exception as search_ex:
+                        print(f"          Error searching '{calendar_name}' TODAY: {search_ex}")
                         errors.append({"time": "ERR", "title": f"SearchFail TODAY: {calendar_name[:15]}", "sort_key": today_start})
 
                     try:
@@ -515,30 +479,28 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local_unused, st
                                     ics_data = ics_data.decode("utf-8")
                                 except UnicodeDecodeError:
                                     ics_data = ics_data.decode("latin-1", errors="replace")
-                            details, is_all_day = _process_event_data(ics_data, user_tz)
-                            if details and details.get("sort_key"):
-                                if tomorrow_start <= details["sort_key"] < tomorrow_end:
-                                    summary = details["title"]
-                                    if is_all_day:
-                                        if summary not in added_all_tomorrow_titles:
-                                            all_tomorrow.append(details)
-                                            added_all_tomorrow_titles.add(summary)
-                                    else:
-                                        key = (details["time"], summary)
-                                        if key not in added_timed_tomorrow_keys:
-                                            timed_tomorrow.append(details)
-                                            added_timed_tomorrow_keys.add(key)
-                    except Exception as search_ex_tomorrow:
-                        print(f"      Error searching calendar '{calendar_name}' for TOMORROW: {search_ex_tomorrow}")
 
-        except caldav.lib.error.AuthorizationError:
-            errors.append({"time": "ERR", "title": f"Auth Fail: {url_display_name}", "sort_key": today_start})
-        except requests.exceptions.Timeout:
-            errors.append({"time": "ERR", "title": f"Timeout: {url_display_name}", "sort_key": today_start})
-        except requests.exceptions.ConnectionError:
-            errors.append({"time": "ERR", "title": f"Connect Fail: {url_display_name}", "sort_key": today_start})
+                            details, is_all_day = _process_event_data(ics_data, user_tz)
+                            if details and details.get("sort_key") and tomorrow_start <= details["sort_key"] < tomorrow_end:
+                                summary = details["title"]
+                                if is_all_day:
+                                    if summary not in added_all_tomorrow_titles:
+                                        all_tomorrow.append(details)
+                                        added_all_tomorrow_titles.add(summary)
+                                else:
+                                    key = (details["time"], summary)
+                                    if key not in added_timed_tomorrow_keys:
+                                        timed_tomorrow.append(details)
+                                        added_timed_tomorrow_keys.add(key)
+                    except Exception as search_ex:
+                        print(f"          Error searching '{calendar_name}' TOMORROW: {search_ex}")
+
+        except (caldav.lib.error.AuthorizationError, requests.exceptions.Timeout, requests.exceptions.ConnectionError) as client_ex:
+            error_type = type(client_ex).__name__.replace("Error", " Fail").replace("Timeout", "Timeout")
+            print(f"      CalDAV {error_type} for {url_display_name}.")
+            errors.append({"time": "ERR", "title": f"{error_type}: {url_display_name}", "sort_key": today_start})
         except Exception as client_ex:
-            print(f"  Error connecting to or processing calendar source {url_display_name}: {client_ex}")
+            print(f"      Unexpected CalDAV Error for {url_display_name}: {client_ex}")
             traceback.print_exc()
             errors.append({"time": "ERR", "title": f"Load Fail: {url_display_name}", "sort_key": today_start})
 
@@ -549,12 +511,11 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local_unused, st
 
     final_today = errors + all_today + timed_today
     final_tomorrow = all_tomorrow + timed_tomorrow
-
     return final_today, final_tomorrow
 
 
 def fetch_weather_data(location, timezone_str):
-    """Fetches weather data from Open-Meteo API, returning dict or None on failure."""
+    """Fetches weather data from Open-Meteo API."""
     weather_data = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1}
     with requests.Session() as session:
         lat, lon = _fetch_lat_lon(location, session)
@@ -585,50 +546,39 @@ def fetch_weather_data(location, timezone_str):
 
             if weather_data["icon_code"] is None or weather_data["icon_code"] == "unknown":
                 daily_codes = daily.get("weather_code", [None])
-                if daily_codes and daily_codes[0] is not None:
-                    weather_data["icon_code"] = daily_codes[0]
-                else:
-                    weather_data["icon_code"] = "unknown"
+                weather_data["icon_code"] = daily_codes[0] if daily_codes and daily_codes[0] is not None else "unknown"
 
             for key in ["temp", "high", "low", "humidity"]:
-                if weather_data[key] is not None and not isinstance(weather_data[key], (int, float)):
-                    print(f"  Warning: Unexpected type for weather data '{key}': {type(weather_data[key])}. Setting to None.")
+                value = weather_data[key]
+                if value is not None and not isinstance(value, (int, float)):
                     weather_data[key] = None
-            if not isinstance(weather_data.get("is_day"), int):
+            if not isinstance(weather_data.get("is_day"), int) or weather_data.get("is_day") not in [0, 1]:
                 weather_data["is_day"] = 1
 
             current_icon_code = weather_data.get("icon_code")
-            if current_icon_code != "unknown":
+            if current_icon_code != "unknown" and current_icon_code is not None:
                 try:
                     weather_data["icon_code"] = int(current_icon_code)
                 except (ValueError, TypeError):
                     weather_data["icon_code"] = "unknown"
+            elif current_icon_code is None:
+                weather_data["icon_code"] = "unknown"
 
             return weather_data
 
-        except requests.exceptions.Timeout:
-            print(f"Error: Open-Meteo forecast request for '{location}' timed out.")
         except requests.exceptions.RequestException as e:
-            print(f"Error during Open-Meteo forecast request for '{location}': {e}")
+            print(f"      Error during Open-Meteo request for '{location}': {e}")
         except (KeyError, IndexError, ValueError, TypeError) as e:
-            print(f"Error processing Open-Meteo forecast response for '{location}': {e}")
+            print(f"      Error processing Open-Meteo response for '{location}': {e}")
         except Exception as e:
-            print(f"Unexpected error processing Open-Meteo forecast for '{location}': {e}")
+            print(f"      Unexpected error processing Open-Meteo forecast for '{location}': {e}")
             traceback.print_exc()
     return None
 
 
 def get_weather_icon_class(is_day, wmo_code):
     """Gets the appropriate Weather Icons CSS class based on WMO code and day/night."""
-    lookup_code = "unknown"
-    if isinstance(wmo_code, int):
-        lookup_code = wmo_code
-    elif wmo_code != "unknown" and wmo_code is not None:
-        try:
-            lookup_code = int(wmo_code)
-        except (ValueError, TypeError):
-            pass
-
+    lookup_code = wmo_code if isinstance(wmo_code, int) else "unknown"
     if is_day == 0:
         return WEATHER_ICON_CLASS_MAP_NIGHT.get(lookup_code, WEATHER_ICON_CLASS_MAP_DAY.get(lookup_code, WEATHER_ICON_CLASS_MAP_DAY["unknown"]))
     else:
@@ -638,80 +588,82 @@ def get_weather_icon_class(is_day, wmo_code):
 def refresh_all_data():
     """Fetches fresh weather and calendar data for ALL configured users and triggers PNG cache regeneration."""
     global APP_DATA
-    print("Starting data refresh cycle for all users...")
+    print("Starting data refresh cycle...")
     new_data = {}
     start_time = time.time()
     hashes_to_render = []
 
+    if not USER_CONFIG:
+        return
+
     for user_hash, config in USER_CONFIG.items():
         print(f"  Refreshing data for user: {user_hash}")
-        caldav_filters = config.get("caldav_filters")
-        caldav_urls = config["caldav_urls"]
-        location = config["weather_location"]
-        timezone_str = config["timezone"]
-        user_tz = config["timezone_obj"]
+        try:
+            user_tz = config["timezone_obj"]
+            now_local = datetime.datetime.now(user_tz)
+            start_of_today_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
 
-        now_local = datetime.datetime.now(user_tz)
-        start_of_today = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
-        end_of_fetch_range = None
+            weather_info = fetch_weather_data(config["weather_location"], config["timezone"])
+            today_events, tomorrow_events = fetch_calendar_events(config.get("caldav_filters"), config.get("caldav_urls", []), start_of_today_local, user_tz)
 
-        weather_info = fetch_weather_data(location, timezone_str)
-        today_events, tomorrow_events = fetch_calendar_events(caldav_filters, caldav_urls, end_of_fetch_range, start_of_today, user_tz)
+            if weather_info:
+                weather_info["icon_class"] = get_weather_icon_class(weather_info.get("is_day", 1), weather_info.get("icon_code"))
+            else:
+                print(f"    Weather fetch failed for {user_hash}, using defaults.")
+                weather_info = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1, "icon_class": "wi-na"}
 
-        if weather_info:
-            weather_info["icon_class"] = get_weather_icon_class(weather_info.get("is_day", 1), weather_info.get("icon_code"))
-        else:
-            weather_info = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1, "icon_class": "wi-na"}
+            new_data[user_hash] = {
+                "last_updated": time.time(),
+                "timezone_obj": user_tz,
+                "timezone_str": config["timezone"],
+                "today_events": today_events,
+                "tomorrow_events": tomorrow_events,
+                "weather": weather_info,
+            }
+            hashes_to_render.append(user_hash)
 
-        new_data[user_hash] = {
-            "last_updated": time.time(),
-            "timezone_obj": user_tz,
-            "timezone_str": timezone_str,
-            "today_events": today_events,
-            "tomorrow_events": tomorrow_events,
-            "weather": weather_info,
-        }
-        print(f"  Finished fetching data for user: {user_hash}")
-        hashes_to_render.append(user_hash)
+        except Exception as e:
+            print(f"  Unexpected error refreshing data for user {user_hash}: {e}")
+            traceback.print_exc()
 
     with APP_DATA_LOCK:
         APP_DATA = new_data
-        print("Global APP_DATA updated with new data.")
+        print("Global APP_DATA updated.")
 
     if hashes_to_render:
         _regenerate_all_pngs(hashes_to_render)
-    else:
-        print("  Skipping PNG regeneration as no user data was fetched.")
 
     end_time = time.time()
-    print(f"Data refresh cycle finished for all users. Duration: {end_time - start_time:.2f} seconds.")
+    print(f"Data refresh cycle finished. Duration: {end_time - start_time:.2f}s.")
 
 
 # ==============================================================================
 # Initial Data Fetch & Background Task Start
 # ==============================================================================
 if USER_CONFIG:
-    print("Performing initial data fetch before starting server...")
+    print("Performing initial data fetch...")
     initial_refresh_thread = threading.Thread(target=refresh_all_data, daemon=False)
     initial_refresh_thread.start()
-    print("Initial data fetch thread started. Server starting concurrently.")
+    print("Initial data fetch thread started.")
 
     refresh_thread = threading.Thread(target=background_refresh_loop, daemon=True)
     refresh_thread.start()
-    print("Background data refresh thread started.")
 else:
-    print("Warning: No users configured in environment or .env file.")
-    print("Server will run, but endpoints will return 404/503.")
-    print("Background refresh thread not started as there is no data to refresh.")
+    print("Warning: No users configured. Background refresh thread not started.")
 
 # ==============================================================================
 # Main Execution Block
 # ==============================================================================
 if __name__ == "__main__":
     print("-" * 60)
-    print("Starting Flask development server (for debugging)...")
-    print(f"HTML view accessible at: http://127.0.0.1:8000/<user_hash>")
-    print(f"PNG image accessible at: http://127.0.0.1:8000/<user_hash>.png")
-    print("Use a WSGI server (e.g., Gunicorn) for production deployments.")
+    print("Starting Flask development server...")
+    if USER_CONFIG:
+        print("Available user endpoints:")
+        for uh in USER_CONFIG.keys():
+            print(f"  HTML: http://127.0.0.1:8000/{uh}")
+            print(f"  PNG:  http://127.0.0.1:8000/{uh}.png")
+    else:
+        print("No users configured.")
+    print("Use a WSGI server (e.g., Gunicorn) for production.")
     print("-" * 60)
     app.run(debug=True, host="0.0.0.0", port=8000, use_reloader=True)
