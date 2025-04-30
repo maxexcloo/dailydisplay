@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="{{ refresh_interval }}">
+  <meta name="viewport" content="initial-scale=1.0,width=device-width">
+  <title>Daily Display - {{ user_hash }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    .display-container {
+      height: 540px;
+      width: 960px;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+{% macro render_event_list(title, events, check_past_events=False, now_local_check=None) %}
+<div class="flex flex-col h-full">
+  <div class="border-b border-black flex-shrink-0 p-2 text-center">
+    <h2 class="font-bold text-2xl">{{ title }}</h2>
+  </div>
+  <div class="flex-grow overflow-y-auto p-4">
+    {% if events %}
+      {% for event in events %}
+        {% set is_past = False %}
+        {% if check_past_events and now_local_check and event.sort_key and event.time != 'All Day' and event.time != 'ERR' %}
+          {% set is_past = event.sort_key < now_local_check %}
+        {% endif %}
+        <div class="flex items-baseline mb-1 {{ 'text-gray-500' if is_past else 'text-black' }}">
+          <span class="flex-shrink-0 text-lg w-[60px] {{ 'font-bold' if event.time != 'All Day' and event.time != 'ERR' else '' }}">
+            {{ event.time }}
+          </span>
+          <span class="break-words text-lg">
+            {{ event.title }}
+          </span>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p class="text-center text-gray-500 text-lg">No events {{ title.lower() }}.</p>
+    {% endif %}
+  </div>
+</div>
+{% endmacro %}
+  <div class="bg-white border border-black display-container flex overflow-hidden text-black">
+    <div class="border-black border-r flex flex-col justify-between p-5 w-[320px]">
+      <div class="text-center">
+        <div class="font-bold leading-none text-7xl">{{ current_time_str }}</div>
+        <div class="mt-2 text-3xl">{{ current_date_str }}</div>
+      </div>
+      <div class="flex items-end justify-center space-x-4">
+        <div>
+          <i class="text-8xl wi {{ weather_info.icon_class | default('wi-na') }}"></i>
+        </div>
+        <div class="flex flex-col text-left">
+          <span class="font-bold leading-tight text-3xl">
+            {% if weather_info.temp is not none %}
+              {{ "%.0f°C" % weather_info.temp }}
+            {% else %}
+              --°C
+            {% endif %}
+          </span>
+          <span class="leading-tight mt-1 text-2xl">
+            {% if weather_info.high is not none and weather_info.low is not none %}
+              H:{{"%.0f°" % weather_info.high}} L:{{"%.0f°" % weather_info.low}}
+            {% else %}
+              H:--° L:--°
+            {% endif %}
+          </span>
+          <span class="leading-tight mt-1 text-2xl">
+            {% if weather_info.humidity is not none %}
+              Hum: {{"%.0f%%" % weather_info.humidity}}
+            {% else %}
+              Hum: --%
+            {% endif %}
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="flex flex-1 flex-col">
+      <div class="flex flex-1 min-h-0">
+        <div class="w-1/2 border-r border-black">
+            {{ render_event_list('Today', today_events, check_past_events=True, now_local_check=now_local) }}
+        </div>
+        <div class="w-1/2">
+             {{ render_event_list('Tomorrow', tomorrow_events, check_past_events=False) }}
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
