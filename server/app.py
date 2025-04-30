@@ -8,6 +8,7 @@
 #     "python-dotenv",
 #     "requests",
 #     "watchdog",
+#     "playwright",
 # ]
 # ///
 
@@ -22,8 +23,9 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import caldav
 import requests
 from dotenv import load_dotenv
-from flask import Flask, abort, render_template
+from flask import Flask, abort, render_template, Response, request
 from icalendar import Calendar
+from playwright.sync_api import sync_playwright, Error as PlaywrightError
 
 # ==============================================================================
 # Load Environment Variables
@@ -43,6 +45,12 @@ API_OPEN_METEO_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 FETCH_CALDAV_TIMEOUT = 30
 FETCH_WEATHER_TIMEOUT = 15
 REFRESH_INTERVAL_SECONDS = 60
+
+# --- PNG Rendering ---
+PNG_BASE_URL = "http://127.0.0.1:5050"
+PNG_VIEWPORT_WIDTH = 960
+PNG_VIEWPORT_HEIGHT = 540
+PNG_TIMEOUT = 30000  # Milliseconds
 
 # --- Weather Icon Mapping ---
 # Ref: https://erikflowers.github.io/weather-icons/ & https://open-meteo.com/en/docs#weathervariables
@@ -260,11 +268,16 @@ def background_refresh_loop():
             traceback.print_exc()
 
 
+# ==============================================================================
+# Flask Routes (Sorted Alphabetically where possible)
+# ==============================================================================
+
+
 @app.route("/<user_hash>")
 def display_page(user_hash):
     """Flask route to render the display page for a specific user."""
     if user_hash not in USER_CONFIG:
-        print(f"Request failed: User hash '{user_hash}' not found in configuration.")
+        print(f"Request failed for HTML: User hash '{user_hash}' not found in configuration.")
         abort(404, description=f"User '{user_hash}' not found.")
 
     user_data = None
@@ -272,7 +285,7 @@ def display_page(user_hash):
         user_data = APP_DATA.get(user_hash, {}).copy()
 
     if not user_data or "timezone_obj" not in user_data:
-        print(f"Request failed: Data not yet available for user '{user_hash}'. Initial refresh might be pending or failed.")
+        print(f"Request failed for HTML: Data not yet available for user '{user_hash}'.")
         abort(503, description="Data is being refreshed or is not yet available, please try again shortly.")
 
     weather_info = user_data.get("weather", {})
@@ -280,14 +293,12 @@ def display_page(user_hash):
     tomorrow_events = user_data.get("tomorrow_events", [])
     user_tz = user_data.get("timezone_obj")
     last_updated_ts = user_data.get("last_updated", 0)
-
     now_user_tz = datetime.datetime.now(user_tz)
     current_time_str = now_user_tz.strftime("%H:%M")
     current_date_str = now_user_tz.strftime("%a, %d %b")
-
     last_updated_dt = datetime.datetime.fromtimestamp(last_updated_ts, tz=datetime.UTC).astimezone(user_tz)
     last_updated_str = last_updated_dt.strftime("%Y-%m-%d %H:%M:%S %Z")
-    print(f"Rendering page for user '{user_hash}'. Data last updated: {last_updated_str}")
+    print(f"Rendering HTML page for user '{user_hash}'. Data last updated: {last_updated_str}")
 
     try:
         return render_template(
@@ -306,6 +317,53 @@ def display_page(user_hash):
         print(f"Error during template rendering for user '{user_hash}': {e}")
         traceback.print_exc()
         abort(500, description="Failed to render display page due to an internal error.")
+
+
+@app.route("/<user_hash>.png")
+def display_page_png(user_hash):
+    """Flask route to render the display page as a PNG image using Playwright."""
+    if user_hash not in USER_CONFIG:
+        print(f"Request failed for PNG: User hash '{user_hash}' not found.")
+        abort(404, description=f"User '{user_hash}' not found.")
+
+    user_data = None
+    with APP_DATA_LOCK:
+        user_data = APP_DATA.get(user_hash, None)
+
+    if user_data is None:
+        print(f"Request failed for PNG: Data not yet available for user '{user_hash}'.")
+        abort(503, description="Data is being refreshed or is not yet available, please try again shortly.")
+
+    target_url = f"{PNG_BASE_URL}/{user_hash}"
+    print(f"Rendering PNG for user '{user_hash}' by accessing URL: {target_url}")
+
+    png_bytes = None
+    browser = None
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            page = browser.new_page()
+            page.set_viewport_size({"width": PNG_VIEWPORT_WIDTH, "height": PNG_VIEWPORT_HEIGHT})
+            page.goto(target_url, wait_until="networkidle", timeout=PNG_TIMEOUT)
+            png_bytes = page.screenshot(type="png")
+            browser.close()
+
+    except PlaywrightError as e:
+        print(f"Playwright Error generating PNG for {user_hash}: {e}")
+        traceback.print_exc()
+        abort(500, description="Failed to generate PNG image due to a browser rendering error.")
+    except Exception as e:
+        print(f"Unexpected Error generating PNG for {user_hash}: {e}")
+        traceback.print_exc()
+        abort(500, description="Failed to generate PNG image due to an unexpected internal error.")
+    finally:
+        if browser and browser.is_connected():
+            browser.close()
+
+    if png_bytes:
+        return Response(png_bytes, mimetype="image/png")
+    else:
+        abort(500, description="PNG image data could not be generated.")
 
 
 def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local, start_date_local, user_tz):
@@ -342,6 +400,7 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local, start_dat
                     calendar_name_lower = calendar_name.lower()
                     if caldav_filters and calendar_name_lower not in caldav_filters:
                         continue
+
                     try:
                         results_today = calendar.date_search(start=today_start, end=today_end, expand=True)
                         for event in results_today:
@@ -353,9 +412,7 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local, start_dat
                                     ics_data = ics_data.decode("utf-8")
                                 except UnicodeDecodeError:
                                     ics_data = ics_data.decode("latin-1", errors="replace")
-
                             details, is_all_day = _process_event_data(ics_data, user_tz)
-
                             if details and details.get("sort_key"):
                                 if today_start <= details["sort_key"] < today_end:
                                     summary = details["title"]
@@ -368,7 +425,6 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local, start_dat
                                         if key not in added_timed_today_keys:
                                             timed_today.append(details)
                                             added_timed_today_keys.add(key)
-
                     except Exception as search_ex_today:
                         print(f"      Error searching calendar '{calendar_name}' for TODAY: {search_ex_today}")
                         errors.append({"time": "ERR", "title": f"SearchFail TODAY: {calendar_name[:15]}", "sort_key": today_start})
@@ -384,9 +440,7 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local, start_dat
                                     ics_data = ics_data.decode("utf-8")
                                 except UnicodeDecodeError:
                                     ics_data = ics_data.decode("latin-1", errors="replace")
-
                             details, is_all_day = _process_event_data(ics_data, user_tz)
-
                             if details and details.get("sort_key"):
                                 if tomorrow_start <= details["sort_key"] < tomorrow_end:
                                     summary = details["title"]
@@ -399,7 +453,6 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local, start_dat
                                         if key not in added_timed_tomorrow_keys:
                                             timed_tomorrow.append(details)
                                             added_timed_tomorrow_keys.add(key)
-
                     except Exception as search_ex_tomorrow:
                         print(f"      Error searching calendar '{calendar_name}' for TOMORROW: {search_ex_tomorrow}")
 
@@ -581,7 +634,8 @@ else:
 if __name__ == "__main__":
     print("-" * 60)
     print("Starting Flask development server (for debugging)...")
-    print("Access the display at URLs like: http://<your-ip>:5050/<user_hash>")
+    print(f"HTML view accessible at: {PNG_BASE_URL}/<user_hash>")
+    print(f"PNG image accessible at: {PNG_BASE_URL}/<user_hash>.png")
     print("Use a WSGI server (e.g., Gunicorn) for production deployments.")
     print("-" * 60)
     app.run(debug=True, host="0.0.0.0", port=5050, use_reloader=True)
