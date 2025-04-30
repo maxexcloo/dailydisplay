@@ -24,7 +24,7 @@
 // ==============================================================================
 const char *ssid = "Schnitzel WiFi";
 const char *password = "wifiwifi";
-const char *serverUrl = "http://192.168.0.167:5050/display/test";
+const char *serverUrl = "http://192.168.0.167:5050/test.png";
 const unsigned long REFRESH_INTERVAL_MS = 60 * 1000;           // 1 minute
 const unsigned long FULL_REFRESH_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 

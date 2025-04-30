@@ -47,10 +47,10 @@ FETCH_WEATHER_TIMEOUT = 15
 REFRESH_INTERVAL_SECONDS = 60  # Interval in seconds for data refresh & HTML refresh
 
 # --- PNG Rendering ---
-PNG_BASE_URL = "http://127.0.0.1:5050"
+# PNG_BASE_URL = "http://127.0.0.1:5050" # No longer needed for set_content
 PNG_VIEWPORT_WIDTH = 960
 PNG_VIEWPORT_HEIGHT = 540
-PNG_TIMEOUT = 30000  # Milliseconds
+PNG_TIMEOUT = 30000  # Milliseconds (still relevant for resource loading within set_content)
 
 # --- Weather Icon Mapping ---
 # Ref: https://erikflowers.github.io/weather-icons/ & https://open-meteo.com/en/docs#weathervariables
@@ -257,7 +257,7 @@ def _process_event_data(ics_data_str, user_tz):
 
 
 def _regenerate_all_pngs(hashes_to_render):
-    """Iterates through specified users and regenerates their cached PNGs."""
+    """Iterates through specified users and regenerates their cached PNGs using Playwright."""
     global PNG_CACHE
     if not hashes_to_render:
         print("  No users marked for PNG regeneration.")
@@ -276,15 +276,39 @@ def _regenerate_all_pngs(hashes_to_render):
             page.set_viewport_size({"width": PNG_VIEWPORT_WIDTH, "height": PNG_VIEWPORT_HEIGHT})
 
             for user_hash in hashes_to_render:
+                user_data_copy = None
+                template_context = None
                 with APP_DATA_LOCK:
-                    is_data_present = user_hash in APP_DATA
+                    if user_hash in APP_DATA:
+                        user_data_copy = APP_DATA[user_hash].copy()
 
-                if not is_data_present:
-                    print(f"    Skipping PNG render for {user_hash}, data check failed.")
+                if not user_data_copy:
+                    print(f"    Skipping PNG render for {user_hash}, data check failed post-lock.")
                     failed_count += 1
                     continue
 
-                png_data = _render_png_for_hash(user_hash, page)
+                try:
+                    user_tz = user_data_copy["timezone_obj"]
+                    now_user_tz = datetime.datetime.now(user_tz)
+                    template_context = {
+                        "user_hash": user_hash,
+                        "current_date_str": now_user_tz.strftime("%a, %d %b"),
+                        "current_time_str": now_user_tz.strftime("%H:%M"),
+                        "last_updated_str": datetime.datetime.fromtimestamp(user_data_copy.get("last_updated", 0), tz=datetime.UTC)
+                        .astimezone(user_tz)
+                        .strftime("%Y-%m-%d %H:%M:%S %Z"),
+                        "now_local": now_user_tz,
+                        "refresh_interval": REFRESH_INTERVAL_SECONDS,
+                        "today_events": user_data_copy.get("today_events", []),
+                        "tomorrow_events": user_data_copy.get("tomorrow_events", []),
+                        "weather_info": user_data_copy.get("weather", {}),
+                    }
+                except Exception as context_err:
+                    print(f"    Error building template context for {user_hash}: {context_err}")
+                    failed_count += 1
+                    continue
+
+                png_data = _render_png_for_hash(user_hash, page, template_context)
                 if png_data:
                     with PNG_CACHE_LOCK:
                         PNG_CACHE[user_hash] = png_data
@@ -306,13 +330,21 @@ def _regenerate_all_pngs(hashes_to_render):
     print(f"  PNG cache regeneration finished. Generated: {generated_count}, Failed: {failed_count}. Duration: {end_png_time - start_png_time:.2f} seconds.")
 
 
-def _render_png_for_hash(user_hash, page):
-    """Helper to render PNG for a specific hash using a shared Playwright page."""
-    target_url = f"{PNG_BASE_URL}/{user_hash}"
+def _render_png_for_hash(user_hash, page, template_context):
+    """Helper to render PNG for a specific hash using Playwright page.set_content()."""
     png_bytes = None
     try:
-        page.goto(target_url, wait_until="networkidle", timeout=PNG_TIMEOUT)
+        print(f"    Rendering template to HTML string for {user_hash}...")
+        with app.app_context():
+            html_string = render_template("index.html", **template_context)
+
+        print(f"    Setting page content for {user_hash}...")
+        page.set_content(html_string, wait_until="load", timeout=PNG_TIMEOUT)
+
+        print(f"    Taking screenshot for {user_hash}...")
         png_bytes = page.screenshot(type="png")
+        print(f"    Successfully rendered PNG for {user_hash}")
+
     except PlaywrightError as e:
         print(f"    Playwright Error generating PNG for {user_hash}: {e}")
     except Exception as e:
@@ -414,7 +446,6 @@ def fetch_calendar_events(caldav_filters, caldav_urls, end_date_local_unused, st
     """
     Fetches and processes calendar events from CalDAV URLs for today and tomorrow
     using separate searches and a helper function for processing.
-    NOTE: end_date_local_unused is no longer used internally.
     """
     all_today, timed_today, all_tomorrow, timed_tomorrow, errors = [], [], [], [], []
     added_all_today_titles, added_timed_today_keys = set(), set()
@@ -621,7 +652,6 @@ def refresh_all_data():
         timezone_str = config["timezone"]
         user_tz = config["timezone_obj"]
 
-        # --- FIX: Calculate start_of_today BEFORE calling fetch_calendar_events ---
         now_local = datetime.datetime.now(user_tz)
         start_of_today = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
         end_of_fetch_range = None
@@ -663,13 +693,9 @@ def refresh_all_data():
 # ==============================================================================
 if USER_CONFIG:
     print("Performing initial data fetch before starting server...")
-    try:
-        refresh_all_data()
-        print("Initial data fetch and PNG cache generation complete.")
-    except Exception as e:
-        print(f"ERROR during initial data fetch/PNG generation: {e}")
-        print("Server will start, but data/images might be unavailable until the first background refresh.")
-        traceback.print_exc()
+    initial_refresh_thread = threading.Thread(target=refresh_all_data, daemon=False)  # Don't use daemon for initial
+    initial_refresh_thread.start()
+    print("Initial data fetch thread started. Server starting concurrently.")
 
     refresh_thread = threading.Thread(target=background_refresh_loop, daemon=True)
     refresh_thread.start()
@@ -685,8 +711,8 @@ else:
 if __name__ == "__main__":
     print("-" * 60)
     print("Starting Flask development server (for debugging)...")
-    print(f"HTML view accessible at: {PNG_BASE_URL}/<user_hash>")
-    print(f"PNG image accessible at: {PNG_BASE_URL}/<user_hash>.png")
+    print(f"HTML view accessible at: http://127.0.0.1:5050/<user_hash>")  # Adjusted example URL
+    print(f"PNG image accessible at: http://127.0.0.1:5050/<user_hash>.png")  # Adjusted example URL
     print("Use a WSGI server (e.g., Gunicorn) for production deployments.")
     print("-" * 60)
-    app.run(debug=True, host="0.0.0.0", port=5050, use_reloader=True)
+    app.run(debug=True, host="0.0.0.0", port=5050, use_reloader=True)  # use_reloader can still cause issues with threads
