@@ -44,13 +44,12 @@ API_OPEN_METEO_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 # --- Data Fetching & Background Task ---
 FETCH_CALDAV_TIMEOUT = 30
 FETCH_WEATHER_TIMEOUT = 15
-REFRESH_INTERVAL_SECONDS = 60  # Interval in seconds for data refresh & HTML refresh
+REFRESH_INTERVAL_SECONDS = 60
 
 # --- PNG Rendering ---
-# PNG_BASE_URL = "http://127.0.0.1:5050" # No longer needed for set_content
 PNG_VIEWPORT_WIDTH = 960
 PNG_VIEWPORT_HEIGHT = 540
-PNG_TIMEOUT = 30000  # Milliseconds (still relevant for resource loading within set_content)
+PNG_TIMEOUT = 30000
 
 # --- Weather Icon Mapping ---
 # Ref: https://erikflowers.github.io/weather-icons/ & https://open-meteo.com/en/docs#weathervariables
@@ -176,7 +175,7 @@ elif not USER_CONFIG:
     print("Warning: No users configured.")
 
 # ==============================================================================
-# Helper Function Definitions (Sorted Alphabetically)
+# Helper Function Definitions
 # ==============================================================================
 
 
@@ -367,7 +366,7 @@ def background_refresh_loop():
 
 
 # ==============================================================================
-# Flask Routes (Sorted Alphabetically where possible)
+# Flask Routes
 # ==============================================================================
 
 
@@ -693,7 +692,7 @@ def refresh_all_data():
 # ==============================================================================
 if USER_CONFIG:
     print("Performing initial data fetch before starting server...")
-    initial_refresh_thread = threading.Thread(target=refresh_all_data, daemon=False)  # Don't use daemon for initial
+    initial_refresh_thread = threading.Thread(target=refresh_all_data, daemon=False)
     initial_refresh_thread.start()
     print("Initial data fetch thread started. Server starting concurrently.")
 
@@ -711,8 +710,8 @@ else:
 if __name__ == "__main__":
     print("-" * 60)
     print("Starting Flask development server (for debugging)...")
-    print(f"HTML view accessible at: http://127.0.0.1:5050/<user_hash>")  # Adjusted example URL
-    print(f"PNG image accessible at: http://127.0.0.1:5050/<user_hash>.png")  # Adjusted example URL
+    print(f"HTML view accessible at: http://127.0.0.1:8000/<user_hash>")
+    print(f"PNG image accessible at: http://127.0.0.1:8000/<user_hash>.png")
     print("Use a WSGI server (e.g., Gunicorn) for production deployments.")
     print("-" * 60)
-    app.run(debug=True, host="0.0.0.0", port=5050, use_reloader=True)  # use_reloader can still cause issues with threads
+    app.run(debug=True, host="0.0.0.0", port=8000, use_reloader=True)
