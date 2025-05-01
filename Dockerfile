@@ -6,7 +6,7 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv /uv /uvx /bin/
 COPY server /app
 RUN awk '/# dependencies = \[/{flag=1; next} /]/{flag=0} flag' app.py | sed 's/^[ \t]*#*[ \t]*//; s/[",]//g; s/playwright/playwright==1.51.0/' > requirements.txt
-RUN uv venv --python python3
+RUN uv venv -p python3
 RUN uv pip install -n -r requirements.txt
-EXPOSE 8000
-CMD ["gunicorn", "--bind", "0.0.0.0:8000", "app:app"]
+EXPOSE 7777
+CMD ["gunicorn", "--bind", "0.0.0.0:7777", "app:app"]

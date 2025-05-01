@@ -348,6 +348,11 @@ def background_refresh_loop():
 # ==============================================================================
 
 
+@app.route("/")
+def default_route():
+    return "", 200, {"Content-Type": "text/plain"}
+
+
 @app.route("/<user_hash>")
 def display_page(user_hash):
     """Flask route to render the display page for a specific user."""
@@ -662,11 +667,11 @@ if __name__ == "__main__":
     print("Starting Flask development server...")
     if USER_CONFIG:
         print("Available user endpoints:")
-        for uh in USER_CONFIG.keys():
-            print(f"  HTML: http://127.0.0.1:8000/{uh}")
-            print(f"  PNG:  http://127.0.0.1:8000/{uh}.png")
+        for user_hash in USER_CONFIG.keys():
+            print(f"  HTML: http://127.0.0.1:7777/{user_hash}")
+            print(f"  PNG:  http://127.0.0.1:7777/{user_hash}.png")
     else:
         print("No users configured.")
     print("Use a WSGI server (e.g., Gunicorn) for production.")
     print("-" * 60)
-    app.run(debug=True, host="0.0.0.0", port=8000, use_reloader=True)
+    app.run(debug=True, host="0.0.0.0", port=7777, use_reloader=True)
