@@ -2,7 +2,7 @@
  * M5Paper S3 E-Ink Dashboard Client
  *
  * Fetches a grayscale PNG from a web service, decodes, and displays it.
- * Performs a full refresh one minute past every hour (XX:01 UTC).
+ * Performs a full refresh every hour (XX:00).
  * Logs errors to Serial.
  *
  * Requires: WiFi, HTTPClient, FastEPD, PNGdec, NTPClient libraries.
@@ -309,10 +309,9 @@ void loop() {
 
   if (WiFi.status() == WL_CONNECTED && timeClient.getEpochTime() > (3600UL * 24 * 365 * 50)) {
     int currentHour = timeClient.getHours();
-    int currentMinute = timeClient.getMinutes();
 
-    if (currentMinute == 1 && currentHour != lastSuccessfulRefreshHour) {
-      Serial.printf("Scheduled refresh: %02d:01 UTC\n", currentHour);
+    if (currentHour != lastSuccessfulRefreshHour) {
+      Serial.printf("Scheduled refresh: %02d:00\n", currentHour);
       if (updateDashboardImage()) {
         lastSuccessfulRefreshHour = currentHour;
       } else {

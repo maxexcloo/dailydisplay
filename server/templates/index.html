@@ -21,40 +21,39 @@
   </style>
 </head>
 <body class="bg-gray-100 flex items-center justify-center min-h-screen">
-{% macro render_event_list(title, events, check_past_events=False, now_local_check=None) %}
-<div class="flex flex-col h-full">
-  <div class="border-b border-black flex-shrink-0 p-2 text-center">
-    <h2 class="font-bold text-2xl">{{ title }}</h2>
-  </div>
-  <div class="flex-grow overflow-y-auto p-4">
-    {% if events %}
-      {% for event in events %}
-        {% set is_past = False %}
-        {% if check_past_events and now_local_check and event.sort_key and event.time != 'All Day' and event.time != 'ERR' %}
-          {% set is_past = event.sort_key < now_local_check %}
+  {% macro render_event_list(day_label, date_str, events, check_past_events=False, now_local_check=None) %}
+    <div class="flex flex-col h-full">
+      <div class="border-b border-black flex-shrink-0 px-4 py-2 flex justify-between items-center">
+        <h2 class="font-bold text-2xl">{{ day_label }}</h2>
+        <h2 class="font-semibold text-xl text-gray-600">{{ date_str }}</h2>
+      </div>
+      <div class="flex-grow overflow-y-auto p-4">
+        {% if events %}
+          {% for event in events %}
+            {% set is_past = False %}
+            {% if check_past_events and now_local_check and event.sort_key and event.time != 'All Day' and event.time != 'ERR' %}
+            {% set is_past = event.sort_key < now_local_check %} {% endif %} <div
+              class="flex items-baseline mb-1 {{ 'text-gray-500' if is_past else 'text-black' }}">
+              <span
+                class="flex-shrink-0 text-lg w-[60px] {{ 'font-bold' if event.time != 'All Day' and event.time != 'ERR' else '' }}">
+                {{ event.time }}
+              </span>
+              <span class="break-words text-lg">
+                {{ event.title }}
+              </span>
+          </div>
+          {% endfor %}
+        {% else %}
+          <p class="text-center text-gray-500 text-lg">No events {{ day_label.lower() }}.</p>
         {% endif %}
-        <div class="flex items-baseline mb-1 {{ 'text-gray-500' if is_past else 'text-black' }}">
-          <span class="flex-shrink-0 text-lg w-[60px] {{ 'font-bold' if event.time != 'All Day' and event.time != 'ERR' else '' }}">
-            {{ event.time }}
-          </span>
-          <span class="break-words text-lg">
-            {{ event.title }}
-          </span>
-        </div>
-      {% endfor %}
-    {% else %}
-      <p class="text-center text-gray-500 text-lg">No events {{ title.lower() }}.</p>
-    {% endif %}
-  </div>
-</div>
-{% endmacro %}
-  <div class="bg-white display-container flex overflow-hidden text-black">
+      </div>
+    </div>
+  {% endmacro %}
+  <div class="bg-white display-container flex overflow-hidden">
     <div class="border-black border-r flex flex-col justify-between p-5 w-[320px]">
       <div class="text-center">
-        <div class="font-bold leading-none text-7xl">{{ current_time_str }}</div>
-        <div class="mt-2 text-3xl">{{ current_date_str }}</div>
       </div>
-      <div class="flex items-end justify-center space-x-4">
+      <div class="flex items-end justify-center p-4 space-x-4">
         <div>
           <i class="text-8xl wi {{ weather_info.icon_class | default('wi-na') }}"></i>
         </div>
@@ -86,13 +85,14 @@
     <div class="flex flex-1 flex-col">
       <div class="flex flex-1 min-h-0">
         <div class="w-1/2 border-r border-black">
-            {{ render_event_list('Today', today_events, check_past_events=True, now_local_check=now_local) }}
+          {{ render_event_list(day_label='Today', date_str=today_date_header_str, events=today_events, check_past_events=True, now_local_check=now_local) }}
         </div>
         <div class="w-1/2">
-             {{ render_event_list('Tomorrow', tomorrow_events, check_past_events=False) }}
+          {{ render_event_list(day_label='Tomorrow', date_str=tomorrow_date_header_str, events=tomorrow_events, check_past_events=False) }}
         </div>
       </div>
     </div>
   </div>
 </body>
+
 </html>
