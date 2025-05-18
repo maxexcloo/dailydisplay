@@ -43,7 +43,7 @@ const char* NTP_SERVER = "pool.ntp.org";
 const unsigned long NTP_SYNC_INTERVAL_MS = 60 * 60 * 1000;
 
 // Server Configuration
-const char* SERVER_URL = "http://192.168.0.167:5050/test.png";
+const char* SERVER_URL = "http://192.168.0.6:7777/max_a8dfbacd-d8ba-41c7-9cb6-f43dcbfe9dae.png";
 
 // ==============================================================================
 // Global Objects & Buffers
