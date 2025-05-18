@@ -42,11 +42,12 @@ API_OPEN_METEO_GEOCODE_URL = "https://geocoding-api.open-meteo.com/v1/search"
 
 FETCH_CALDAV_TIMEOUT = 30
 FETCH_WEATHER_TIMEOUT = 15
-REFRESH_INTERVAL_SECONDS = 60
+HTML_PAGE_REFRESH_SECONDS = 60
+TARGET_REFRESH_MINUTE = 58
 
-PNG_VIEWPORT_WIDTH = 960
-PNG_VIEWPORT_HEIGHT = 540
 PNG_TIMEOUT = 30000
+PNG_VIEWPORT_HEIGHT = 540
+PNG_VIEWPORT_WIDTH = 960
 
 WEATHER_ICON_CLASS_MAP_DAY = {
     0: "wi-day-sunny",
@@ -174,13 +175,24 @@ except Exception as e:
 if not USER_CONFIG:
     print("Warning: No valid user configurations loaded.")
 
+
 # ==============================================================================
-# Helper Function Definitions
+# Helper Function Definitions (Alphabetically Sorted)
 # ==============================================================================
+def _build_template_context(user_hash, user_data):
+    user_tz = user_data["timezone_obj"]
+    now_user_tz = datetime.datetime.now(user_tz)
+    last_updated_ts = user_data.get("last_updated", 0)
+    last_updated_dt = datetime.datetime.fromtimestamp(last_updated_ts, tz=datetime.UTC).astimezone(user_tz)
+
+    today_date_header_str = now_user_tz.strftime("%a, %b %d")
+    tomorrow_date_obj = now_user_tz + datetime.timedelta(days=1)
+    tomorrow_date_header_str = tomorrow_date_obj.strftime("%a, %b %d")
+
+    return {"user_hash": user_hash, "current_date_str": now_user_tz.strftime("%a, %d %b"), "last_updated_str": last_updated_dt.strftime("%Y-%m-%d %H:%M:%S %Z"), "now_local": now_user_tz, "refresh_interval": HTML_PAGE_REFRESH_SECONDS, "today_events": user_data.get("today_events", []), "tomorrow_events": user_data.get("tomorrow_events", []), "weather_info": user_data.get("weather", {}), "today_date_header_str": today_date_header_str, "tomorrow_date_header_str": tomorrow_date_header_str}
 
 
 def _fetch_lat_lon(location_name, session):
-    """Internal helper to fetch latitude/longitude using Open-Meteo Geocoding."""
     params = {"name": location_name, "count": 1, "language": "en", "format": "json"}
     try:
         response = session.get(API_OPEN_METEO_GEOCODE_URL, params=params, timeout=FETCH_WEATHER_TIMEOUT / 2)
@@ -200,7 +212,6 @@ def _fetch_lat_lon(location_name, session):
 
 
 def _process_event_data(ics_data_str, user_tz):
-    """Parses ICS data, extracts VEVENT details, localizes time."""
     try:
         cal = Calendar.from_ical(ics_data_str)
         ical_component = next(iter(cal.walk("VEVENT")), None)
@@ -244,7 +255,6 @@ def _process_event_data(ics_data_str, user_tz):
 
 
 def _regenerate_all_pngs(hashes_to_render):
-    """Iterates through specified users and regenerates their cached PNGs using Playwright."""
     global PNG_CACHE
     if not hashes_to_render:
         return
@@ -254,10 +264,12 @@ def _regenerate_all_pngs(hashes_to_render):
     generated_count = 0
     failed_count = 0
     browser = None
+    context = None
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch()
-            page = browser.new_page()
+            context = browser.new_context(device_scale_factor=1)
+            page = context.new_page()
             page.set_viewport_size({"width": PNG_VIEWPORT_WIDTH, "height": PNG_VIEWPORT_HEIGHT})
 
             for user_hash in hashes_to_render:
@@ -266,26 +278,12 @@ def _regenerate_all_pngs(hashes_to_render):
                     user_data_copy = APP_DATA.get(user_hash, {}).copy()
 
                 if not user_data_copy or "timezone_obj" not in user_data_copy:
-                    print(f"    Skipping PNG render for {user_hash}, data missing.")
+                    print(f"    Skipping PNG render for {user_hash}, essential data missing.")
                     failed_count += 1
                     continue
 
                 try:
-                    user_tz = user_data_copy["timezone_obj"]
-                    now_user_tz = datetime.datetime.now(user_tz)
-                    last_updated_ts = user_data_copy.get("last_updated", 0)
-                    last_updated_dt = datetime.datetime.fromtimestamp(last_updated_ts, tz=datetime.UTC).astimezone(user_tz)
-                    template_context = {
-                        "user_hash": user_hash,
-                        "current_date_str": now_user_tz.strftime("%a, %d %b"),
-                        "current_time_str": now_user_tz.strftime("%H:%M"),
-                        "last_updated_str": last_updated_dt.strftime("%Y-%m-%d %H:%M:%S %Z"),
-                        "now_local": now_user_tz,
-                        "refresh_interval": REFRESH_INTERVAL_SECONDS,
-                        "today_events": user_data_copy.get("today_events", []),
-                        "tomorrow_events": user_data_copy.get("tomorrow_events", []),
-                        "weather_info": user_data_copy.get("weather", {}),
-                    }
+                    template_context = _build_template_context(user_hash, user_data_copy)
                 except Exception as context_err:
                     print(f"    Error building template context for {user_hash}: {context_err}")
                     failed_count += 1
@@ -298,13 +296,21 @@ def _regenerate_all_pngs(hashes_to_render):
                     generated_count += 1
                 else:
                     failed_count += 1
-
-            browser.close()
     except (PlaywrightError, Exception) as e:
         print(f"  FATAL Playwright/PNG Error: {e}")
         traceback.print_exc()
-        failed_count = len(hashes_to_render)
+        failed_count = len(hashes_to_render) - generated_count
     finally:
+        if page:
+            try:
+                page.close()
+            except Exception as page_close_err:
+                print(f"    Error closing page: {page_close_err}")
+        if context:
+            try:
+                context.close()
+            except Exception as context_close_err:
+                print(f"    Error closing context: {context_close_err}")
         if browser and browser.is_connected():
             try:
                 browser.close()
@@ -316,10 +322,10 @@ def _regenerate_all_pngs(hashes_to_render):
 
 
 def _render_png_for_hash(user_hash, page, template_context):
-    """Helper to render PNG for a specific hash using Playwright page.set_content()."""
     try:
         with app.app_context():
             html_string = render_template("index.html", **template_context)
+
         page.set_content(html_string, wait_until="networkidle", timeout=PNG_TIMEOUT)
         png_bytes = page.screenshot(type="png")
         print(f"    Rendered PNG for {user_hash}")
@@ -329,61 +335,64 @@ def _render_png_for_hash(user_hash, page, template_context):
     return None
 
 
+# ==============================================================================
+# Background Task
+# ==============================================================================
 def background_refresh_loop():
-    """Runs the refresh_all_data function periodically in a background thread."""
-    print("Background refresh thread started.")
+    print(f"Background refresh thread started. Will aim to refresh data around HH:{TARGET_REFRESH_MINUTE:02d} UTC.")
+    time.sleep(10)
+
     while True:
-        time.sleep(REFRESH_INTERVAL_SECONDS)
-        print(f"Background thread: Refreshing data at {datetime.datetime.now(datetime.UTC)}")
+        now_utc = datetime.datetime.now(datetime.UTC)
+        next_refresh_time_utc = now_utc.replace(minute=TARGET_REFRESH_MINUTE, second=0, microsecond=0)
+
+        if now_utc.minute >= TARGET_REFRESH_MINUTE:
+            next_refresh_time_utc += datetime.timedelta(hours=1)
+
+        sleep_duration_seconds = (next_refresh_time_utc - now_utc).total_seconds()
+
+        if sleep_duration_seconds < 0:
+            sleep_duration_seconds = 5
+            print(f"Warning: Calculated sleep duration is negative ({sleep_duration_seconds}s). Fallback to 5s sleep.")
+
+        print(f"Background thread: Current UTC is {now_utc.strftime('%Y-%m-%d %H:%M:%S')}. Next refresh at {next_refresh_time_utc.strftime('%Y-%m-%d %H:%M:%S')} UTC. Sleeping for {sleep_duration_seconds:.2f}s.")
+        time.sleep(sleep_duration_seconds)
+
+        print(f"Background thread: Woke up at {datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M:%S')}. Triggering data refresh.")
         try:
             refresh_all_data()
         except Exception as e:
-            print(f"ERROR in background refresh loop: {e}")
+            print(f"ERROR in background_refresh_loop during refresh_all_data: {e}")
             traceback.print_exc()
-            time.sleep(15)
+            print("An error occurred during data refresh. Waiting for 60 seconds before next attempt.")
+            time.sleep(60)
 
 
 # ==============================================================================
 # Flask Routes
 # ==============================================================================
-
-
 @app.route("/")
 def default_route():
-    return "", 200, {"Content-Type": "text/plain"}
+    return "E-Ink Dashboard Server OK", 200, {"Content-Type": "text/plain"}
 
 
 @app.route("/<user_hash>")
 def display_page(user_hash):
-    """Flask route to render the display page for a specific user."""
     if user_hash not in USER_CONFIG:
-        abort(404, description=f"User '{user_hash}' not found.")
+        abort(404, description=f"User '{user_hash}' not found or not configured.")
 
     with APP_DATA_LOCK:
         user_data = APP_DATA.get(user_hash, {}).copy()
 
     if not user_data or "timezone_obj" not in user_data or "last_updated" not in user_data:
-        status = 503 if user_hash in USER_CONFIG else 404
-        description = "Data unavailable, please try again shortly." if status == 503 else f"User '{user_hash}' not configured."
+        status = 503
+        description = "Data for this user is currently unavailable. Please try again shortly."
+        print(f"Data not ready for user '{user_hash}'. Current APP_DATA keys: {list(APP_DATA.keys())}")
         abort(status, description=description)
 
     try:
-        user_tz = user_data["timezone_obj"]
-        now_user_tz = datetime.datetime.now(user_tz)
-        last_updated_dt = datetime.datetime.fromtimestamp(user_data["last_updated"], tz=datetime.UTC).astimezone(user_tz)
-
-        return render_template(
-            "index.html",
-            current_date_str=now_user_tz.strftime("%a, %d %b"),
-            current_time_str=now_user_tz.strftime("%H:%M"),
-            last_updated_str=last_updated_dt.strftime("%Y-%m-%d %H:%M:%S %Z"),
-            now_local=now_user_tz,
-            refresh_interval=REFRESH_INTERVAL_SECONDS,
-            today_events=user_data.get("today_events", []),
-            tomorrow_events=user_data.get("tomorrow_events", []),
-            user_hash=user_hash,
-            weather_info=user_data.get("weather", {}),
-        )
+        template_context = _build_template_context(user_hash, user_data)
+        return render_template("index.html", **template_context)
     except Exception as e:
         print(f"Error during template rendering for user '{user_hash}': {e}")
         traceback.print_exc()
@@ -392,9 +401,8 @@ def display_page(user_hash):
 
 @app.route("/<user_hash>.png")
 def display_page_png(user_hash):
-    """Flask route to serve the proactively cached PNG image."""
     if user_hash not in USER_CONFIG:
-        abort(404, description=f"User '{user_hash}' not found.")
+        abort(404, description=f"User '{user_hash}' not found or not configured.")
 
     with PNG_CACHE_LOCK:
         png_bytes = PNG_CACHE.get(user_hash)
@@ -403,14 +411,20 @@ def display_page_png(user_hash):
         return Response(png_bytes, mimetype="image/png")
     else:
         with APP_DATA_LOCK:
-            data_exists = user_hash in APP_DATA and APP_DATA[user_hash]
-        status = 500 if data_exists else 503
-        description = "PNG unavailable (rendering error?)." if status == 500 else "Data/PNG unavailable, please try again shortly."
-        abort(status, description=description)
+            data_should_exist = user_hash in APP_DATA and APP_DATA[user_hash] is not None
+
+        if data_should_exist:
+            print(f"PNG not found in cache for '{user_hash}', but data exists. Possible render issue.")
+            abort(500, description="PNG image is currently unavailable (possible rendering error). Please try again shortly.")
+        else:
+            print(f"PNG not found in cache for '{user_hash}', and underlying data is also missing.")
+            abort(503, description="Data and PNG image are currently unavailable. Please try again shortly.")
 
 
+# ==============================================================================
+# Core Data Fetching Logic
+# ==============================================================================
 def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz):
-    """Fetches and processes calendar events from CalDAV URLs for today and tomorrow."""
     all_today, timed_today, all_tomorrow, timed_tomorrow, errors = [], [], [], [], []
     added_all_today_titles, added_timed_today_keys = set(), set()
     added_all_tomorrow_titles, added_timed_tomorrow_keys = set(), set()
@@ -436,20 +450,21 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                 principal = client.principal()
                 calendars = principal.calendars()
                 if not calendars:
+                    print(f"      No calendars found for principal at {url_display_name}.")
                     continue
 
-                for calendar in calendars:
+                for calendar_obj in calendars:
                     try:
-                        calendar_name = calendar.name or "Unknown"
-                    except Exception:
-                        calendar_name = "Unknown(Err)"
+                        calendar_name = getattr(calendar_obj, "name", "Unknown Calendar") or "Unknown Calendar"
+                    except Exception as cal_name_ex:
+                        calendar_name = f"Unknown(NameErr: {cal_name_ex})"
                     calendar_name_lower = calendar_name.lower()
 
                     if caldav_filters and calendar_name_lower not in caldav_filters:
                         continue
 
                     try:
-                        results_today = calendar.date_search(start=today_start, end=today_end, expand=True)
+                        results_today = calendar_obj.date_search(start=today_start, end=today_end, expand=True)
                         for event in results_today:
                             if not hasattr(event, "data") or not event.data:
                                 continue
@@ -473,11 +488,11 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                                         timed_today.append(details)
                                         added_timed_today_keys.add(key)
                     except Exception as search_ex:
-                        print(f"          Error searching '{calendar_name}' TODAY: {search_ex}")
-                        errors.append({"time": "ERR", "title": f"SearchFail TODAY: {calendar_name[:15]}", "sort_key": today_start})
+                        print(f"          Error searching '{calendar_name}' for TODAY: {search_ex}")
+                        errors.append({"time": "ERR", "title": f"CalSearchFail TODAY: {calendar_name[:15]}", "sort_key": today_start})
 
                     try:
-                        results_tomorrow = calendar.date_search(start=tomorrow_start, end=tomorrow_end, expand=True)
+                        results_tomorrow = calendar_obj.date_search(start=tomorrow_start, end=tomorrow_end, expand=True)
                         for event in results_tomorrow:
                             if not hasattr(event, "data") or not event.data:
                                 continue
@@ -501,16 +516,16 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                                         timed_tomorrow.append(details)
                                         added_timed_tomorrow_keys.add(key)
                     except Exception as search_ex:
-                        print(f"          Error searching '{calendar_name}' TOMORROW: {search_ex}")
+                        print(f"          Error searching '{calendar_name}' for TOMORROW: {search_ex}")
 
         except (caldav.lib.error.AuthorizationError, requests.exceptions.Timeout, requests.exceptions.ConnectionError) as client_ex:
             error_type = type(client_ex).__name__.replace("Error", " Fail").replace("Timeout", "Timeout")
             print(f"      CalDAV {error_type} for {url_display_name}.")
-            errors.append({"time": "ERR", "title": f"{error_type}: {url_display_name}", "sort_key": today_start})
+            errors.append({"time": "ERR", "title": f"{error_type}: {url_display_name[:20]}", "sort_key": today_start})
         except Exception as client_ex:
             print(f"      Unexpected CalDAV Error for {url_display_name}: {client_ex}")
             traceback.print_exc()
-            errors.append({"time": "ERR", "title": f"Load Fail: {url_display_name}", "sort_key": today_start})
+            errors.append({"time": "ERR", "title": f"CalLoad Fail: {url_display_name[:20]}", "sort_key": today_start})
 
     timed_today.sort(key=lambda x: x["sort_key"])
     all_today.sort(key=lambda x: x["title"])
@@ -523,11 +538,11 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
 
 
 def fetch_weather_data(location, timezone_str):
-    """Fetches weather data from Open-Meteo API."""
     weather_data = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1}
     with requests.Session() as session:
         lat, lon = _fetch_lat_lon(location, session)
         if lat is None or lon is None:
+            print(f"      Weather fetch failed for '{location}': Could not get coordinates.")
             return None
 
         params = {
@@ -559,6 +574,7 @@ def fetch_weather_data(location, timezone_str):
             for key in ["temp", "high", "low", "humidity"]:
                 value = weather_data[key]
                 if value is not None and not isinstance(value, (int, float)):
+                    print(f"        Warning: Weather data '{key}' for '{location}' is not a number: {value}. Setting to None.")
                     weather_data[key] = None
             if not isinstance(weather_data.get("is_day"), int) or weather_data.get("is_day") not in [0, 1]:
                 weather_data["is_day"] = 1
@@ -585,23 +601,20 @@ def fetch_weather_data(location, timezone_str):
 
 
 def get_weather_icon_class(is_day, wmo_code):
-    """Gets the appropriate Weather Icons CSS class based on WMO code and day/night."""
     lookup_code = wmo_code if isinstance(wmo_code, int) else "unknown"
-    if is_day == 0:
-        return WEATHER_ICON_CLASS_MAP_NIGHT.get(lookup_code, WEATHER_ICON_CLASS_MAP_DAY.get(lookup_code, WEATHER_ICON_CLASS_MAP_DAY["unknown"]))
-    else:
-        return WEATHER_ICON_CLASS_MAP_DAY.get(lookup_code, WEATHER_ICON_CLASS_MAP_DAY["unknown"])
+    icon_map = WEATHER_ICON_CLASS_MAP_NIGHT if is_day == 0 else WEATHER_ICON_CLASS_MAP_DAY
+    return icon_map.get(lookup_code, WEATHER_ICON_CLASS_MAP_DAY.get(lookup_code, WEATHER_ICON_CLASS_MAP_DAY["unknown"]))
 
 
 def refresh_all_data():
-    """Fetches fresh weather and calendar data for ALL configured users and triggers PNG cache regeneration."""
     global APP_DATA
     print("Starting data refresh cycle...")
-    new_data = {}
+    new_user_data_map = {}
     start_time = time.time()
-    hashes_to_render = []
+    hashes_requiring_png_render = []
 
     if not USER_CONFIG:
+        print("No users configured. Skipping data refresh.")
         return
 
     for user_hash, config in USER_CONFIG.items():
@@ -617,10 +630,10 @@ def refresh_all_data():
             if weather_info:
                 weather_info["icon_class"] = get_weather_icon_class(weather_info.get("is_day", 1), weather_info.get("icon_code"))
             else:
-                print(f"    Weather fetch failed for {user_hash}, using defaults.")
-                weather_info = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1, "icon_class": "wi-na"}
+                print(f"    Weather fetch failed for {user_hash}, using default placeholder.")
+                weather_info = {"temp": None, "high": None, "low": None, "humidity": None, "icon_code": "unknown", "is_day": 1, "icon_class": get_weather_icon_class(1, "unknown")}
 
-            new_data[user_hash] = {
+            new_user_data_map[user_hash] = {
                 "last_updated": time.time(),
                 "timezone_obj": user_tz,
                 "timezone_str": config["timezone"],
@@ -628,18 +641,20 @@ def refresh_all_data():
                 "tomorrow_events": tomorrow_events,
                 "weather": weather_info,
             }
-            hashes_to_render.append(user_hash)
+            hashes_requiring_png_render.append(user_hash)
 
         except Exception as e:
             print(f"  Unexpected error refreshing data for user {user_hash}: {e}")
             traceback.print_exc()
 
     with APP_DATA_LOCK:
-        APP_DATA = new_data
+        APP_DATA = new_user_data_map
         print("Global APP_DATA updated.")
 
-    if hashes_to_render:
-        _regenerate_all_pngs(hashes_to_render)
+    if hashes_requiring_png_render:
+        _regenerate_all_pngs(hashes_requiring_png_render)
+    else:
+        print("No users had data successfully refreshed or no users to refresh. PNG regeneration skipped.")
 
     end_time = time.time()
     print(f"Data refresh cycle finished. Duration: {end_time - start_time:.2f}s.")
@@ -648,30 +663,43 @@ def refresh_all_data():
 # ==============================================================================
 # Initial Data Fetch & Background Task Start
 # ==============================================================================
-if USER_CONFIG:
-    print("Performing initial data fetch...")
-    initial_refresh_thread = threading.Thread(target=refresh_all_data, daemon=False)
-    initial_refresh_thread.start()
-    print("Initial data fetch thread started.")
+# This flag ensures threads are started only once, even with reloader
+_threads_started = False
 
-    refresh_thread = threading.Thread(target=background_refresh_loop, daemon=True)
-    refresh_thread.start()
-else:
-    print("Warning: No users configured. Background refresh thread not started.")
+
+def start_background_tasks():
+    global _threads_started
+    if not _threads_started:
+        if USER_CONFIG:
+            print("Performing initial data fetch on startup...")
+            initial_refresh_thread = threading.Thread(target=refresh_all_data, daemon=False, name="InitialDataRefreshThread")
+            initial_refresh_thread.start()
+            print("Initial data fetch process initiated.")
+
+            refresh_thread = threading.Thread(target=background_refresh_loop, daemon=True, name="BackgroundRefreshLoopThread")
+            refresh_thread.start()
+            print("Background refresh loop thread started.")
+            _threads_started = True
+        else:
+            print("Warning: No users configured. Initial data fetch and background refresh thread not started.")
+
 
 # ==============================================================================
-# Main Execution Block
+# Main Execution Block (for Development)
 # ==============================================================================
 if __name__ == "__main__":
+    if os.environ.get("WERKZEUG_RUN_MAIN") == "true" or not app.debug:
+        start_background_tasks()
+
     print("-" * 60)
     print("Starting Flask development server...")
     if USER_CONFIG:
-        print("Available user endpoints:")
-        for user_hash in USER_CONFIG.keys():
-            print(f"  HTML: http://127.0.0.1:7777/{user_hash}")
-            print(f"  PNG:  http://127.0.0.1:7777/{user_hash}.png")
+        print("Available user endpoints (approximate for dev server):")
+        for user_hash_key in USER_CONFIG.keys():
+            print(f"  HTML: http://127.0.0.1:7777/{user_hash_key}")
+            print(f"  PNG:  http://127.0.0.1:7777/{user_hash_key}.png")
     else:
-        print("No users configured.")
-    print("Use a WSGI server (e.g., Gunicorn) for production.")
+        print("No users configured. Server will run but no user-specific data will be available.")
+    print("Note: Use a WSGI server (e.g., Gunicorn) for production deployments.")
     print("-" * 60)
     app.run(debug=True, host="0.0.0.0", port=7777, use_reloader=True)
