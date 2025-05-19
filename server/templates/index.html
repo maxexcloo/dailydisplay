@@ -24,7 +24,7 @@
   {% macro render_event_list(day_label, date_str, events, check_past_events=False, now_local_check=None) %}
     <div class="flex flex-col h-full">
       <div class="border-b border-black flex-shrink-0 px-4 py-2 flex justify-between items-center">
-        <h2 class="font-bold text-2xl">{{ day_label }}</h2>
+        <h2 class="font-bold text-3xl">{{ day_label }}</h2>
         <h2 class="font-semibold text-xl text-gray-600">{{ date_str }}</h2>
       </div>
       <div class="flex-grow overflow-y-auto p-4">
@@ -32,19 +32,18 @@
           {% for event in events %}
             {% set is_past = False %}
             {% if check_past_events and now_local_check and event.sort_key and event.time != 'All Day' and event.time != 'ERR' %}
-            {% set is_past = event.sort_key < now_local_check %} {% endif %} <div
-              class="flex items-baseline mb-1 {{ 'text-gray-500' if is_past else 'text-black' }}">
+            {% set is_past = event.sort_key < now_local_check %} {% endif %} <div class="flex items-baseline mb-1 {{ 'text-gray-500' if is_past else 'text-black' }}">
               <span
-                class="flex-shrink-0 text-lg w-[60px] {{ 'font-bold' if event.time != 'All Day' and event.time != 'ERR' else '' }}">
+                class="flex-shrink-0 text-xl w-[80px] {{ 'font-bold' if event.time != 'All Day' and event.time != 'ERR' else '' }}">
                 {{ event.time }}
               </span>
-              <span class="break-words text-lg">
+              <span class="break-words text-xl">
                 {{ event.title }}
               </span>
           </div>
           {% endfor %}
         {% else %}
-          <p class="text-center text-gray-500 text-lg">No events {{ day_label.lower() }}.</p>
+          <p class="text-center text-gray-500 text-xl">No events {{ day_label.lower() }}.</p>
         {% endif %}
       </div>
     </div>
@@ -53,12 +52,12 @@
     <div class="border-black border-r flex flex-col justify-between p-5 w-[320px]">
       <div class="text-center">
       </div>
-      <div class="flex items-end justify-center p-4 space-x-4">
+      <div class="flex items-center justify-center space-x-4">
         <div>
           <i class="text-8xl wi {{ weather_info.icon_class | default('wi-na') }}"></i>
         </div>
-        <div class="flex flex-col text-left">
-          <span class="font-bold leading-tight text-3xl">
+        <div class="flex flex-col font-bold text-left">
+          <span class="leading-tight text-3xl">
             {% if weather_info.temp is not none %}
               {{ "%.0f°C" % weather_info.temp }}
             {% else %}
