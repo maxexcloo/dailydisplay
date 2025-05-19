@@ -21,19 +21,19 @@ const int TEXT_MARGIN_X = 10;
 const int TEXT_MARGIN_Y = 10;
 
 // General Configuration
-const unsigned long MAIN_LOOP_DELAY_MS = 30000;
+const unsigned long MAIN_LOOP_DELAY_MS = 30 * 1000;
 const char* SERVER_URL = "";
 
 // Network Configuration
 const char* WIFI_SSID = "";
 const char* WIFI_PASSWORD = "";
-const unsigned long WIFI_CONNECTING_MESSAGE_INTERVAL_MS = 30000;
-const unsigned long WIFI_RETRY_PAUSE_MS = 30000;
+const unsigned long WIFI_CONNECTING_MESSAGE_INTERVAL_MS = 30 * 1000;
+const unsigned long WIFI_RETRY_PAUSE_MS = 30 * 1000;
 
 // NTP Configuration
 const char* NTP_SERVER = "pool.ntp.org";
 const unsigned long MIN_VALID_EPOCH_TIME = (3600UL * 24 * 365 * 50);
-const unsigned long NTP_RETRY_PAUSE_MS = 15000;
+const unsigned long NTP_RETRY_PAUSE_MS = 30 * 1000;
 const unsigned long NTP_SYNC_INTERVAL_MS = 60 * 60 * 1000;
 
 // ==============================================================================
@@ -290,9 +290,7 @@ bool updateNTPTime(bool forceSync) {
 // ==============================================================================
 void setup() {
   Serial.begin(115200);
-  while (!Serial && millis() < 2000) {
-    ;
-  }
+  while (!Serial && millis() < 2000) {}
   Serial.println("\nM5Paper S3 Dashboard Client");
 
   epaper.initPanel(BB_PANEL_M5PAPERS3);
@@ -300,23 +298,14 @@ void setup() {
   epaper.fillScreen(0xf);
   epaper.fullUpdate(false);
 
-  if (connectWifi()) {
-    displayTextMessage("WiFi Connected\nIP: " + WiFi.localIP().toString());
-  }
-
+  connectWifi();
   updateNTPTime(true);
 
   Serial.println("Setup complete.");
 }
 
 void loop() {
-  bool wasConnected = (WiFi.status() == WL_CONNECTED);
-
   if (connectWifi()) {
-    if (!wasConnected) {
-      displayTextMessage("WiFi Reconnected\nIP: " + WiFi.localIP().toString());
-    }
-
     updateNTPTime(false);
 
     if (timeClient.getEpochTime() > MIN_VALID_EPOCH_TIME) {
@@ -324,6 +313,7 @@ void loop() {
 
       if (currentHour != lastSuccessfulRefreshHour) {
         Serial.printf("Scheduled refresh: Current hour %02d:00, Last successful refresh hour: %02d:00\n", currentHour, lastSuccessfulRefreshHour);
+
         if (updateDashboardImage()) {
           lastSuccessfulRefreshHour = currentHour;
         } else {
