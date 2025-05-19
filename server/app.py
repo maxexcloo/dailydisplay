@@ -241,47 +241,83 @@ def _regenerate_all_pngs(hashes_to_render):
         return
     print(f"  Starting PNG cache regeneration for {len(hashes_to_render)} users...")
     start_png_time, generated_count, failed_count = time.time(), 0, 0
-    browser, context, page = None, None, None
+
+    playwright_instance_successfully_started = False
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            context = browser.new_context(device_scale_factor=1)
-            page = context.new_page()
-            page.set_viewport_size({"width": PNG_VIEWPORT_WIDTH, "height": PNG_VIEWPORT_HEIGHT})
-            for user_hash in hashes_to_render:
-                with APP_DATA_LOCK:
-                    user_data_copy = APP_DATA.get(user_hash, {}).copy()
-                if not user_data_copy or "timezone_obj" not in user_data_copy:
-                    print(f"    Skipping PNG render for {user_hash}, essential data missing.")
-                    failed_count += 1
-                    continue
-                try:
-                    template_context = _build_template_context(user_hash, user_data_copy)
-                except Exception as context_err:
-                    print(f"    Error building template context for {user_hash}: {context_err}")
-                    failed_count += 1
-                    continue
-                png_data = _render_png_for_hash(user_hash, page, template_context)
-                if png_data:
-                    with PNG_CACHE_LOCK:
-                        PNG_CACHE[user_hash] = png_data
-                    generated_count += 1
-                else:
-                    failed_count += 1
-    except (PlaywrightError, Exception) as e:
-        print(f"  FATAL Playwright/PNG Error: {e}")
+            playwright_instance_successfully_started = True
+            browser = None
+            context = None
+            page = None
+            try:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(device_scale_factor=1)
+                page = context.new_page()
+                page.set_viewport_size({"width": PNG_VIEWPORT_WIDTH, "height": PNG_VIEWPORT_HEIGHT})
+
+                for user_hash in hashes_to_render:
+                    with APP_DATA_LOCK:
+                        user_data_copy = APP_DATA.get(user_hash, {}).copy()
+
+                    if not user_data_copy or "timezone_obj" not in user_data_copy:
+                        print(f"    Skipping PNG render for {user_hash}, essential data missing.")
+                        failed_count += 1
+                        continue
+
+                    template_context = None
+                    try:
+                        template_context = _build_template_context(user_hash, user_data_copy)
+                    except Exception as context_err:
+                        print(f"    Error building template context for {user_hash}: {context_err}")
+                        failed_count += 1
+                        continue
+
+                    png_data = _render_png_for_hash(user_hash, page, template_context)
+                    if png_data:
+                        with PNG_CACHE_LOCK:
+                            PNG_CACHE[user_hash] = png_data
+                        generated_count += 1
+                    else:
+                        failed_count += 1
+
+            except PlaywrightError as e_pw_inner:
+                print(f"  Playwright Error during PNG generation process: {e_pw_inner}")
+                traceback.print_exc()
+                failed_count = len(hashes_to_render) - generated_count
+            except Exception as e_other_inner:
+                print(f"  Unexpected error during PNG generation process: {e_other_inner}")
+                traceback.print_exc()
+                failed_count = len(hashes_to_render) - generated_count
+            finally:
+                if page:
+                    try:
+                        page.close()
+                    except PlaywrightError as pe_page:
+                        print(f"    Error closing Playwright page: {pe_page}")
+                if context:
+                    try:
+                        context.close()
+                    except PlaywrightError as pe_context:
+                        print(f"    Error closing Playwright context: {pe_context}")
+                if browser:
+                    try:
+                        browser.close()
+                    except PlaywrightError as pe_browser:
+                        print(f"    Error closing Playwright browser: {pe_browser}")
+
+    except PlaywrightError as e_pw_outer:
+        print(f"  FATAL: Playwright failed to initialize or suffered a critical error: {e_pw_outer}")
         traceback.print_exc()
-        failed_count = len(hashes_to_render) - generated_count
-    finally:
-        for item_to_close, name in [(page, "page"), (context, "context"), (browser, "browser")]:
-            if item_to_close:
-                try:
-                    if name == "browser" and item_to_close.is_connected():
-                        item_to_close.close()
-                    elif name != "browser":
-                        item_to_close.close()
-                except Exception as close_err:
-                    print(f"    Error closing Playwright {name}: {close_err}")
+        if not playwright_instance_successfully_started:
+            failed_count = len(hashes_to_render)
+            generated_count = 0
+    except Exception as e_other_outer:
+        print(f"  FATAL: Unexpected error outside main Playwright block: {e_other_outer}")
+        traceback.print_exc()
+        if not playwright_instance_successfully_started:
+            failed_count = len(hashes_to_render)
+            generated_count = 0
+
     print(f"  PNG regeneration finished. Generated: {generated_count}, Failed: {failed_count}. Duration: {time.time() - start_png_time:.2f}s.")
 
 

@@ -1,14 +1,3 @@
-/**
- * M5Paper S3 E-Ink Dashboard Client
- *
- * Fetches a grayscale PNG from a web service, decodes, and displays it.
- * Performs a full refresh every hour (XX:00).
- * Logs errors to Serial.
- *
- * Requires: WiFi, HTTPClient, FastEPD, PNGdec, NTPClient libraries.
- * Assumes PSRAM is enabled.
- */
-
 // Standard Library Includes
 #include <string.h>
 
@@ -31,191 +20,160 @@ const int SCREEN_HEIGHT = 540;
 const int TEXT_MARGIN_X = 10;
 const int TEXT_MARGIN_Y = 10;
 
+// General Configuration
+const unsigned long MAIN_LOOP_DELAY_MS = 30000;
+const char* SERVER_URL = "";
+
 // Network Configuration
-const int HTTP_TIMEOUT_MS = 30 * 1000;
-const int WIFI_CONNECT_RETRIES = 3;
-const int WIFI_CONNECT_TIMEOUT_MS = 20 * 1000;
 const char* WIFI_SSID = "";
 const char* WIFI_PASSWORD = "";
+const unsigned long WIFI_CONNECTING_MESSAGE_INTERVAL_MS = 30000;
+const unsigned long WIFI_RETRY_PAUSE_MS = 30000;
 
 // NTP Configuration
 const char* NTP_SERVER = "pool.ntp.org";
+const unsigned long MIN_VALID_EPOCH_TIME = (3600UL * 24 * 365 * 50);
+const unsigned long NTP_RETRY_PAUSE_MS = 15000;
 const unsigned long NTP_SYNC_INTERVAL_MS = 60 * 60 * 1000;
-
-// Server Configuration
-const char* SERVER_URL = "";
 
 // ==============================================================================
 // Global Objects & Buffers
 // ==============================================================================
 FASTEPD epaper;
+HTTPClient http;
 PNG png;
-uint8_t* png_buffer = nullptr;                      // Buffer for the downloaded PNG
-uint16_t png_callback_rgb565_buffer[SCREEN_WIDTH];  // Line buffer for PNG decoding
-
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP, NTP_SERVER, 0, NTP_SYNC_INTERVAL_MS);  // UTC
-
-int lastSuccessfulRefreshHour = -1;      // Tracks the hour of the last successful image refresh
-unsigned long lastNTPAttemptMillis = 0;  // For periodic NTP sync attempts in loop
+WiFiUDP udp;
+NTPClient timeClient(udp, NTP_SERVER, 0, NTP_SYNC_INTERVAL_MS);
+int lastSuccessfulRefreshHour = -1;
+uint8_t* png_buffer = nullptr;
+uint16_t png_callback_rgb565_buffer[SCREEN_WIDTH];
 
 // ==============================================================================
 // Helper Functions
 // ==============================================================================
 
-/**
- * @brief Connects to WiFi with retries.
- * @return True if connected, false otherwise.
- */
 bool connectWifi() {
   if (WiFi.status() == WL_CONNECTED) {
     return true;
   }
-  WiFi.mode(WIFI_STA);
-  Serial.printf("Connecting to WiFi: %s\n", WIFI_SSID);
 
-  for (int attempt = 0; attempt < WIFI_CONNECT_RETRIES; ++attempt) {
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  unsigned long lastDisplayMessageTime = 0;
+  WiFi.mode(WIFI_STA);
+  Serial.printf("Connecting to WiFi: %s (indefinite retries)...\n", WIFI_SSID);
+
+  for (;;) {
+    if (millis() - lastDisplayMessageTime >= WIFI_CONNECTING_MESSAGE_INTERVAL_MS || lastDisplayMessageTime == 0) {
+      displayTextMessage("WiFi Connecting...");
+      lastDisplayMessageTime = millis();
+    }
+
     unsigned long connectStartMillis = millis();
-    Serial.printf("Attempt %d... ", attempt + 1);
-    while (WiFi.status() != WL_CONNECTED && (millis() - connectStartMillis < WIFI_CONNECT_TIMEOUT_MS)) {
+    const unsigned long singleAttemptCycleTimeout = 30 * 1000;
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    Serial.print("Attempting WiFi.begin() sequence...");
+
+    while (millis() - connectStartMillis < singleAttemptCycleTimeout) {
+      if (WiFi.status() == WL_CONNECTED) {
+        Serial.println("\nWiFi connected. IP: " + WiFi.localIP().toString());
+        return true;
+      }
+
       delay(500);
       Serial.print(".");
     }
 
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nWiFi connected. IP: " + WiFi.localIP().toString());
-      displayTextMessage("WiFi Connected\nIP: " + WiFi.localIP().toString());
-      return true;
-    } else {
-      Serial.println("\nWiFi connect failed.");
-      WiFi.disconnect(true);
-      delay(1000);
-      if (attempt < WIFI_CONNECT_RETRIES - 1) {
-        displayTextMessage("WiFi Fail. Retry...");
-      }
-    }
+    WiFi.disconnect(true);
+    Serial.println("\nConnection attempt sequence timed out.");
+    Serial.println("Waiting before next connection attempt...");
+    delay(WIFI_RETRY_PAUSE_MS);
   }
-  Serial.println("WiFi connection failed after all retries.");
-  displayTextMessage("WiFi Connect Failed");
+
   return false;
 }
 
-/**
- * @brief Displays a message on the E-Ink screen.
- */
 void displayTextMessage(const String& message) {
-  epaper.fillScreen(0xf);    // White background
-  epaper.setTextColor(0x0);  // Black text
-  epaper.setFont(FONT_12x16);
-  int yPos = TEXT_MARGIN_Y;
-  int lineStart = 0;
   int fontHeight = 16;
+  int lineStart = 0;
+  int yPos = TEXT_MARGIN_Y;
+  epaper.fillScreen(0xf);
+  epaper.setFont(FONT_12x16);
+  epaper.setTextColor(0x0);
 
   for (int i = 0; i <= message.length(); i++) {
     if (i == message.length() || message.charAt(i) == '\n') {
       epaper.setCursor(TEXT_MARGIN_X, yPos);
       epaper.print(message.substring(lineStart, i));
-      yPos += fontHeight + 4;
       lineStart = i + 1;
+      yPos += fontHeight + 4;
     }
   }
+
   epaper.fullUpdate(true);
 }
 
-/**
- * @brief Ensures WiFi is connected, trying to reconnect if necessary.
- * @return True if connected, false otherwise.
- */
-bool ensureWiFiConnected() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("WiFi disconnected. Reconnecting...");
-    return connectWifi();
-  }
-  return true;
-}
-
-/**
- * @brief Frees the PNG buffer from PSRAM/heap.
- */
 void freePngBuffer() {
   if (png_buffer) {
-    heap_caps_free(png_buffer);  // Use heap_caps_free for memory from heap_caps_malloc
+    heap_caps_free(png_buffer);
     png_buffer = nullptr;
   }
 }
 
-/**
- * @brief PNG decoder callback. Converts RGB565 line to 4bpp grayscale
- * and writes directly into the epaper buffer.
- */
 void pngDrawCallback(PNGDRAW* pDraw) {
   uint8_t* pBuffer = epaper.currentBuffer();
-  // Basic validation
-  if (!pBuffer || pDraw->y >= SCREEN_HEIGHT || pDraw->iWidth <= 0) return;
-
-  // Ensure decoded line width does not exceed screen width for buffer access
-  int process_width = (pDraw->iWidth > SCREEN_WIDTH) ? SCREEN_WIDTH : pDraw->iWidth;
-
-  const int BITMAP_PITCH = SCREEN_WIDTH / 2;  // Bytes per row for 4bpp buffer
-  png.getLineAsRGB565(pDraw, png_callback_rgb565_buffer, PNG_RGB565_LITTLE_ENDIAN, 0xffffffff);
-
-  uint16_t* s = png_callback_rgb565_buffer;          // Source: RGB565 pixels
-  uint8_t* d = &pBuffer[(pDraw->y * BITMAP_PITCH)];  // Destination: E-Paper buffer for current line
-
-  for (int x = 0; x < process_width / 2; x++) {  // Process two pixels at a time
-    uint16_t p1 = *s++;
-    // Average R,G,B components, then scale to 4-bit (0-15)
-    int g0 = (((p1 & 0xF800) >> 11) + ((p1 & 0x07E0) >> 5) + (p1 & 0x001F)) / 3;
-    g0 >>= 1;
-    if (g0 > 15) g0 = 15;
-
-    uint16_t p2 = *s++;
-    int g1 = (((p2 & 0xF800) >> 11) + ((p2 & 0x07E0) >> 5) + (p2 & 0x001F)) / 3;
-    g1 >>= 1;
-    if (g1 > 15) g1 = 15;
-
-    *d++ = (uint8_t)((g0 << 4) | g1);  // Pack two 4-bit pixels into one byte
+  if (!pBuffer || pDraw->y >= SCREEN_HEIGHT || pDraw->iWidth <= 0) {
+    return;
   }
 
-  // Handle odd width: process the last pixel if width is odd
+  png.getLineAsRGB565(pDraw, png_callback_rgb565_buffer, PNG_RGB565_LITTLE_ENDIAN, 0xffffffff);
+
+  const int bitmap_pitch = SCREEN_WIDTH / 2;
+  int process_width = pDraw->iWidth;
+  uint16_t* s = png_callback_rgb565_buffer;
+  uint8_t* d = &pBuffer[(pDraw->y * bitmap_pitch)];
+
+  for (int x = 0; x < process_width / 2; x++) {
+    uint16_t p1_rgb565 = *s++;
+    int g0_val = ((p1_rgb565 & 0x07E0) >> 5) + ((p1_rgb565 & 0xF800) >> 11) + (p1_rgb565 & 0x001F);
+    g0_val >>= 3;
+    if (g0_val > 15) g0_val = 15;
+
+    uint16_t p2_rgb565 = *s++;
+    int g1_val = ((p2_rgb565 & 0x07E0) >> 5) + ((p2_rgb565 & 0xF800) >> 11) + (p2_rgb565 & 0x001F);
+    g1_val >>= 3;
+    if (g1_val > 15) g1_val = 15;
+
+    *d++ = (uint8_t)((g0_val << 4) | g1_val);
+  }
+
   if (process_width % 2 == 1) {
-    uint16_t p1 = *s;
-    int g0 = (((p1 & 0xF800) >> 11) + ((p1 & 0x07E0) >> 5) + (p1 & 0x001F)) / 3;
-    g0 >>= 1;
-    if (g0 > 15) g0 = 15;
-    // Assuming buffer was cleared (e.g. to white 0xFF), preserve the second nibble
-    *d = (uint8_t)((g0 << 4) | (*d & 0x0F));
+    uint16_t p1_rgb565 = *s;
+    int g0_val = ((p1_rgb565 & 0x07E0) >> 5) + ((p1_rgb565 & 0xF800) >> 11) + (p1_rgb565 & 0x001F);
+    g0_val >>= 3;
+    if (g0_val > 15) g0_val = 15;
+    *d = (uint8_t)((g0_val << 4) | (*d & 0x0F));
   }
 }
 
-/**
- * @brief Fetches, decodes, and displays the PNG image from the server.
- * @return True on success, false on failure.
- */
 bool updateDashboardImage() {
-  if (!ensureWiFiConnected()) {
-    return false;
-  }
-
   Serial.println("Fetching image...");
-  displayTextMessage("Fetching image...");
-
-  HTTPClient http;
   http.begin(SERVER_URL);
-  http.setTimeout(HTTP_TIMEOUT_MS);
   int httpCode = http.GET();
   bool success = false;
 
   if (httpCode == HTTP_CODE_OK) {
     int len = http.getSize();
+
     if (len <= 0) {
       Serial.println("Error: Empty content from server.");
       displayTextMessage("Error: Empty Content");
     } else {
       freePngBuffer();
       png_buffer = (uint8_t*)heap_caps_malloc(len, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-      if (!png_buffer) png_buffer = (uint8_t*)malloc(len);
+
+      if (!png_buffer) {
+        Serial.println("PSRAM allocation failed, trying internal RAM...");
+        png_buffer = (uint8_t*)malloc(len);
+      }
 
       if (!png_buffer) {
         Serial.printf("Error: Failed to allocate %d bytes for PNG.\n", len);
@@ -228,27 +186,37 @@ bool updateDashboardImage() {
           Serial.printf("Error: PNG download incomplete (%d/%d bytes).\n", bytes_read, len);
           displayTextMessage("Error: PNG Download");
         } else {
-          Serial.println("PNG downloaded. Decoding...");
-          displayTextMessage("Decoding image...");
+          Serial.println("PNG downloaded. Preparing to decode...");
+          epaper.fillScreen(0xf);
+
           int rc = png.openRAM(png_buffer, len, pngDrawCallback);
           if (rc == PNG_SUCCESS) {
-            rc = png.decode(nullptr, 0);
-            png.close();
-            if (rc == PNG_SUCCESS) {
-              Serial.println("PNG decoded. Updating screen...");
-              displayTextMessage("Updating screen...");
-              epaper.fullUpdate(false);
-              Serial.println("Screen update complete.");
-              success = true;
+            if (png.getWidth() > SCREEN_WIDTH) {
+              Serial.printf("Error: PNG width (%d) exceeds screen width (%d). Aborting decode.\n", png.getWidth(), SCREEN_WIDTH);
+              png.close();
+              displayTextMessage("Error: Image Too Wide\n(" + String(png.getWidth()) + "px > " + String(SCREEN_WIDTH) + "px)");
             } else {
-              Serial.printf("Error: PNG decode failed (Code: %d).\n", rc);
-              displayTextMessage("Error: PNG Decode");
+              Serial.println("Decoding PNG into E-Paper buffer...");
+              rc = png.decode(nullptr, 0);
+              png.close();
+
+              if (rc == PNG_SUCCESS) {
+                Serial.println("PNG decoded successfully into E-Paper buffer.");
+                Serial.println("Updating screen with image...");
+                epaper.fullUpdate(true);
+                Serial.println("Screen update complete.");
+                success = true;
+              } else {
+                Serial.printf("Error: PNG decode failed (Code: %d).\n", rc);
+                displayTextMessage("Error: PNG Decode");
+              }
             }
           } else {
             Serial.printf("Error: PNG open failed (Code: %d).\n", rc);
             displayTextMessage("Error: PNG Open");
           }
         }
+
         freePngBuffer();
       }
     }
@@ -261,13 +229,70 @@ bool updateDashboardImage() {
   return success;
 }
 
+bool updateNTPTime(bool forceSync) {
+  static unsigned long lastPeriodicNTPAttemptMillis = 0;
+  unsigned long currentTime = millis();
+
+  if (lastPeriodicNTPAttemptMillis > currentTime && lastPeriodicNTPAttemptMillis != 0) {
+    lastPeriodicNTPAttemptMillis = currentTime;
+  }
+
+  if (forceSync) {
+    Serial.println("NTP: Initializing and attempting first sync (will retry indefinitely)...");
+    timeClient.begin();
+
+    for (;;) {
+      if (!connectWifi()) {
+        Serial.println("NTP: WiFi connection lost during forced sync attempt. Retrying WiFi...");
+        delay(WIFI_RETRY_PAUSE_MS);
+        continue;
+      }
+
+      Serial.println("NTP: Attempting forceUpdate()...");
+      if (timeClient.forceUpdate()) {
+        Serial.println("NTP: Initial sync successful. Time: " + timeClient.getFormattedTime());
+        return true;
+      } else {
+        Serial.println("NTP: Initial sync attempt failed.");
+        displayTextMessage("NTP Sync Failed");
+        Serial.println("NTP: Retrying...");
+        delay(NTP_RETRY_PAUSE_MS);
+      }
+    }
+  } else {
+    if (!((currentTime - lastPeriodicNTPAttemptMillis >= (NTP_SYNC_INTERVAL_MS / 2)) || lastPeriodicNTPAttemptMillis == 0)) {
+      return true;
+    }
+
+    if (!connectWifi()) {
+      Serial.println("NTP: WiFi not connected for periodic update.");
+      return false;
+    }
+
+    Serial.println("NTP: Attempting periodic update...");
+    bool success = timeClient.update();
+    lastPeriodicNTPAttemptMillis = currentTime;
+
+    if (success) {
+      Serial.println("NTP: Periodic sync successful. Time: " + timeClient.getFormattedTime());
+      return true;
+    } else {
+      Serial.println("NTP: Periodic sync failed.");
+      return false;
+    }
+  }
+
+  return false;
+}
+
 // ==============================================================================
 // Setup & Loop
 // ==============================================================================
 void setup() {
   Serial.begin(115200);
-  while (!Serial && millis() < 2000)
+  while (!Serial && millis() < 2000) {
     ;
+  }
   Serial.println("\nM5Paper S3 Dashboard Client");
 
   epaper.initPanel(BB_PANEL_M5PAPERS3);
@@ -276,51 +301,39 @@ void setup() {
   epaper.fullUpdate(false);
 
   if (connectWifi()) {
-    Serial.println("Initializing NTP...");
-    displayTextMessage("WiFi OK. NTP Init...");
-    timeClient.begin();
-    if (timeClient.forceUpdate()) {
-      Serial.println("NTP time: " + timeClient.getFormattedTime());
-      displayTextMessage("NTP OK. Waiting...");
-    } else {
-      Serial.println("NTP initial sync failed.");
-      displayTextMessage("NTP Sync Failed");
-    }
+    displayTextMessage("WiFi Connected\nIP: " + WiFi.localIP().toString());
   }
-  lastNTPAttemptMillis = millis();
+
+  updateNTPTime(true);
+
   Serial.println("Setup complete.");
 }
 
 void loop() {
-  unsigned long currentTime = millis();
+  bool wasConnected = (WiFi.status() == WL_CONNECTED);
 
-  if (lastNTPAttemptMillis > currentTime) {
-    lastNTPAttemptMillis = currentTime;
-  }
-
-  if (WiFi.status() == WL_CONNECTED && (currentTime - lastNTPAttemptMillis >= (NTP_SYNC_INTERVAL_MS / 2) || lastNTPAttemptMillis == 0)) {
-    if (timeClient.update()) {
-      Serial.println("NTP time synced: " + timeClient.getFormattedTime());
-    } else {
-      Serial.println("NTP sync attempt failed.");
+  if (connectWifi()) {
+    if (!wasConnected) {
+      displayTextMessage("WiFi Reconnected\nIP: " + WiFi.localIP().toString());
     }
-    lastNTPAttemptMillis = currentTime;
-  }
 
-  if (WiFi.status() == WL_CONNECTED && timeClient.getEpochTime() > (3600UL * 24 * 365 * 50)) {
-    int currentHour = timeClient.getHours();
+    updateNTPTime(false);
 
-    if (currentHour != lastSuccessfulRefreshHour) {
-      Serial.printf("Scheduled refresh: %02d:00\n", currentHour);
-      if (updateDashboardImage()) {
-        lastSuccessfulRefreshHour = currentHour;
-      } else {
-        Serial.println("Scheduled image update failed. Will retry next hour.");
+    if (timeClient.getEpochTime() > MIN_VALID_EPOCH_TIME) {
+      int currentHour = timeClient.getHours();
+
+      if (currentHour != lastSuccessfulRefreshHour) {
+        Serial.printf("Scheduled refresh: Current hour %02d:00, Last successful refresh hour: %02d:00\n", currentHour, lastSuccessfulRefreshHour);
+        if (updateDashboardImage()) {
+          lastSuccessfulRefreshHour = currentHour;
+        } else {
+          Serial.println("Scheduled image update failed. Will retry next hour.");
+        }
       }
+    } else {
+      Serial.println("NTP time not yet valid for image refresh check.");
     }
-  } else if (WiFi.status() != WL_CONNECTED) {
-    ensureWiFiConnected();
   }
 
-  delay(5000);
+  delay(MAIN_LOOP_DELAY_MS);
 }
