@@ -22,7 +22,7 @@ const int TEXT_MARGIN_Y = 10;
 
 // General Configuration
 const unsigned long MAIN_LOOP_DELAY_MS = 30 * 1000;
-const char* SERVER_URL = "http://192.168.0.6:7777/max_a8dfbacd-d8ba-41c7-9cb6-f43dcbfe9dae.png";
+const char* SERVER_URL = "http://192.168.0.6:7777/ginny_adb42d58-a926-4184-8f6c-d4bd90d21c41.png";
 
 // Network Configuration
 const char* WIFI_SSID = "Schnitzel WiFi";

@@ -210,6 +210,9 @@ def _process_event_data(ics_data_str, user_tz):
         ical_component = next(iter(cal.walk("VEVENT")), None)
         if not ical_component:
             return None, None
+        status = ical_component.get("status")
+        if status and str(status).upper() == "CANCELLED":
+            return None, None
         summary_comp = ical_component.get("summary")
         dtstart_comp = ical_component.get("dtstart")
         if not summary_comp or not dtstart_comp:
@@ -231,7 +234,7 @@ def _process_event_data(ics_data_str, user_tz):
             return None, None
         return {"time": time_str, "title": summary, "sort_key": event_start_local}, is_all_day
     except Exception as e:
-        print(f"        Error parsing single event data ({'Iterator Issue' if 'object is not an iterator' in str(e) else 'General'}): {e}")
+        print(f"         Error parsing single event data ({'Iterator Issue' if 'object is not an iterator' in str(e) else 'General'}): {e}")
         return None, None
 
 
@@ -429,7 +432,7 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                 principal = client.principal()
                 calendars = principal.calendars()
                 if not calendars:
-                    print(f"      No calendars found for principal at {url_display_name}.")
+                    print(f"         No calendars found for principal at {url_display_name}.")
                     continue
                 for calendar_obj in calendars:
                     try:
@@ -438,15 +441,12 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                         calendar_name = f"Unknown(NameErr: {cal_name_ex})"
                     if caldav_filters and calendar_name.lower() not in caldav_filters:
                         continue
-                    for day_period, results_list, all_day_list, timed_list, added_all_day, added_timed in [("TODAY", today_start, all_today, timed_today, added_all_today_titles, added_timed_today_keys), ("TOMORROW", tomorrow_start, all_tomorrow, timed_tomorrow, added_all_tomorrow_titles, added_timed_tomorrow_keys)]:
-                        period_end = results_list + datetime.timedelta(days=1)
-                        if day_period == "TODAY":
-                            period_end = today_end
-                        else:
-                            period_end = tomorrow_end
-
+                    for day_period, period_start, period_end, all_day_list, timed_list, added_all_day, added_timed in [
+                        ("TODAY", today_start, today_end, all_today, timed_today, added_all_today_titles, added_timed_today_keys),
+                        ("TOMORROW", tomorrow_start, tomorrow_end, all_tomorrow, timed_tomorrow, added_all_tomorrow_titles, added_timed_tomorrow_keys)
+                    ]:
                         try:
-                            results = calendar_obj.date_search(start=results_list, end=period_end, expand=True)
+                            results = calendar_obj.date_search(start=period_start, end=period_end, expand=True)
                             for event in results:
                                 if not hasattr(event, "data") or not event.data:
                                     continue
@@ -457,7 +457,7 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                                     except UnicodeDecodeError:
                                         ics_data = ics_data.decode("latin-1", errors="replace")
                                 details, is_all_day_event = _process_event_data(ics_data, user_tz)
-                                if details and details.get("sort_key") and results_list <= details["sort_key"] < period_end:
+                                if details and details.get("sort_key") and period_start <= details["sort_key"] < period_end:
                                     summary = details["title"]
                                     if is_all_day_event:
                                         if summary not in added_all_day:
@@ -469,15 +469,15 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                                             timed_list.append(details)
                                             added_timed.add(key)
                         except Exception as search_ex:
-                            print(f"          Error searching '{calendar_name}' for {day_period}: {search_ex}")
+                            print(f"               Error searching '{calendar_name}' for {day_period}: {search_ex}")
                             if day_period == "TODAY":
                                 errors.append({"time": "ERR", "title": f"CalSearchFail {day_period}: {calendar_name[:10]}", "sort_key": today_start})
         except (caldav.lib.error.AuthorizationError, requests.exceptions.Timeout, requests.exceptions.ConnectionError) as client_ex:
             error_type = type(client_ex).__name__.replace("Error", " Fail").replace("Timeout", "Timeout")
-            print(f"      CalDAV {error_type} for {url_display_name}.")
+            print(f"         CalDAV {error_type} for {url_display_name}.")
             errors.append({"time": "ERR", "title": f"{error_type}: {url_display_name[:20]}", "sort_key": today_start})
         except Exception as client_ex:
-            print(f"      Unexpected CalDAV Error for {url_display_name}: {client_ex}")
+            print(f"         Unexpected CalDAV Error for {url_display_name}: {client_ex}")
             traceback.print_exc()
             errors.append({"time": "ERR", "title": f"CalLoad Fail: {url_display_name[:20]}", "sort_key": today_start})
     timed_today.sort(key=lambda x: x["sort_key"])
