@@ -218,6 +218,7 @@ def _process_event_data(ics_data_str, user_tz):
         if not summary_comp or not dtstart_comp:
             return None, None
         summary = str(summary_comp)
+        uid = str(ical_component.get("uid"))
         instance_start_time_obj = dtstart_comp.dt
         is_all_day = isinstance(instance_start_time_obj, datetime.date) and not isinstance(instance_start_time_obj, datetime.datetime)
         event_start_local, time_str = None, "ERR"
@@ -232,7 +233,7 @@ def _process_event_data(ics_data_str, user_tz):
             return None, None
         if event_start_local is None:
             return None, None
-        return {"time": time_str, "title": summary, "sort_key": event_start_local}, is_all_day
+        return {"time": time_str, "title": summary, "sort_key": event_start_local, "uid": uid}, is_all_day
     except Exception as e:
         print(f"         Error parsing single event data ({'Iterator Issue' if 'object is not an iterator' in str(e) else 'General'}): {e}")
         return None, None
@@ -441,10 +442,32 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                         calendar_name = f"Unknown(NameErr: {cal_name_ex})"
                     if caldav_filters and calendar_name.lower() not in caldav_filters:
                         continue
-                    for day_period, period_start, period_end, all_day_list, timed_list, added_all_day, added_timed in [
-                        ("TODAY", today_start, today_end, all_today, timed_today, added_all_today_titles, added_timed_today_keys),
-                        ("TOMORROW", tomorrow_start, tomorrow_end, all_tomorrow, timed_tomorrow, added_all_tomorrow_titles, added_timed_tomorrow_keys)
-                    ]:
+                    excluded_dates_by_uid = {}
+                    try:
+                        wide_start = today_start - datetime.timedelta(days=365)
+                        wide_end = tomorrow_end + datetime.timedelta(days=365)
+                        potential_masters = calendar_obj.date_search(start=wide_start, end=wide_end, expand=False)
+                        for event_stub in potential_masters:
+                            cal = Calendar.from_ical(event_stub.data)
+                            for comp in cal.walk("VEVENT"):
+                                if comp.get("EXDATE"):
+                                    uid = str(comp.get("uid"))
+                                    if uid not in excluded_dates_by_uid:
+                                        excluded_dates_by_uid[uid] = set()
+                                    exdates_prop = comp.get("EXDATE")
+                                    if not isinstance(exdates_prop, list):
+                                        exdates_prop = [exdates_prop]
+                                    for exdate_list in exdates_prop:
+                                        for vdate in exdate_list.dts:
+                                            dt = vdate.dt
+                                            if isinstance(dt, datetime.datetime):
+                                                dt_aware = dt.astimezone(user_tz) if dt.tzinfo else user_tz.localize(dt)
+                                                excluded_dates_by_uid[uid].add(dt_aware.date())
+                                            else:
+                                                excluded_dates_by_uid[uid].add(dt)
+                    except Exception as e:
+                        print(f"               Warning: Could not build EXDATE blocklist for '{calendar_name}': {e}")
+                    for day_period, period_start, period_end, all_day_list, timed_list, added_all_day, added_timed in [("TODAY", today_start, today_end, all_today, timed_today, added_all_today_titles, added_timed_today_keys), ("TOMORROW", tomorrow_start, tomorrow_end, all_tomorrow, timed_tomorrow, added_all_tomorrow_titles, added_timed_tomorrow_keys)]:
                         try:
                             results = calendar_obj.date_search(start=period_start, end=period_end, expand=True)
                             for event in results:
@@ -457,17 +480,22 @@ def fetch_calendar_events(caldav_filters, caldav_urls, start_date_local, user_tz
                                     except UnicodeDecodeError:
                                         ics_data = ics_data.decode("latin-1", errors="replace")
                                 details, is_all_day_event = _process_event_data(ics_data, user_tz)
-                                if details and details.get("sort_key") and period_start <= details["sort_key"] < period_end:
-                                    summary = details["title"]
-                                    if is_all_day_event:
-                                        if summary not in added_all_day:
-                                            all_day_list.append(details)
-                                            added_all_day.add(summary)
-                                    else:
-                                        key = (details["time"], summary)
-                                        if key not in added_timed:
-                                            timed_list.append(details)
-                                            added_timed.add(key)
+                                if details and details.get("sort_key"):
+                                    event_start_dt = details["sort_key"]
+                                    event_uid = details.get("uid")
+                                    if event_uid in excluded_dates_by_uid and event_start_dt.date() in excluded_dates_by_uid[event_uid]:
+                                        continue
+                                    if period_start <= event_start_dt < period_end:
+                                        summary = details["title"]
+                                        if is_all_day_event:
+                                            if summary not in added_all_day:
+                                                all_day_list.append(details)
+                                                added_all_day.add(summary)
+                                        else:
+                                            key = (details["time"], summary)
+                                            if key not in added_timed:
+                                                timed_list.append(details)
+                                                added_timed.add(key)
                         except Exception as search_ex:
                             print(f"               Error searching '{calendar_name}' for {day_period}: {search_ex}")
                             if day_period == "TODAY":
