@@ -1,162 +1,103 @@
 # Daily Display
 
-A personal dashboard system for E-Ink displays that shows calendar events and weather information. Built for M5Paper S3 devices with a Python Flask backend and Arduino client.
-
-## Features
-
-- **Calendar Integration**: Fetches events from CalDAV sources
-- **Weather Display**: Current conditions and forecasts via Open-Meteo API
-- **E-Ink Optimized**: Grayscale rendering optimized for E-Paper displays
-- **Multi-User Support**: Multiple user configurations with personalized timezones and locations
-- **Auto-Refresh**: Hourly updates with background data fetching
-- **PNG Export**: Pre-rendered images for efficient display updates
-
-## Architecture
-
-### Server (`server/`)
-- **Flask Application**: REST API server with template rendering
-- **Background Tasks**: Scheduled data fetching and PNG generation
-- **Data Sources**: CalDAV calendars and Open-Meteo weather API
-- **Multi-threading**: Concurrent data fetching with thread-safe operations
-
-### Client (`client/`)
-- **Arduino/ESP32**: M5Paper S3 compatible firmware
-- **WiFi Management**: Auto-reconnection and robust error handling
-- **PNG Rendering**: Direct-to-display image decoding
-- **NTP Sync**: Automatic time synchronization
+Personal dashboard for E-Ink displays showing calendar events and weather. Python Flask server + Arduino ESP32 client for M5Paper S3.
 
 ## Quick Start
 
-### Server Setup
+### Server
+```bash
+# Set configuration
+export CONFIG='{
+  "user_hash": {
+    "timezone": "America/New_York",
+    "weather_location": "New York, NY",
+    "caldav_urls": "https://user:pass@calendar.example.com/cal.ics"
+  }
+}'
 
-1. **Environment Configuration**:
-   ```bash
-   export CONFIG='{
-     "user_hash": {
-       "timezone": "America/New_York",
-       "weather_location": "New York, NY",
-       "caldav_urls": "https://user:pass@calendar.example.com/cal.ics",
-       "caldav_filter_names": "personal,work"
-     }
-   }'
-   ```
+# Run with Docker (recommended)
+docker run -d -p 7777:7777 -e CONFIG="$CONFIG" --restart unless-stopped ghcr.io/max.schaefer/dailydisplay:latest
 
-2. **Run with Docker**:
-   ```bash
-   docker build -t dailydisplay .
-   docker run -p 7777:7777 -e CONFIG="$CONFIG" dailydisplay
-   ```
+# Or with docker-compose
+docker-compose up -d
+```
 
-3. **Or run locally**:
-   ```bash
-   cd server
-   python app.py
-   ```
-
-### Client Setup
-
-1. **Configure WiFi and Server** in `client.ino`:
-   ```cpp
-   const char* WIFI_SSID = "YourWiFi";
-   const char* WIFI_PASSWORD = "YourPassword";
-   const char* SERVER_URL = "http://your-server:7777/your_hash.png";
-   ```
-
-2. **Flash to M5Paper S3** using Arduino IDE or PlatformIO
-
-## API Endpoints
-
-- `GET /` - Health check
-- `GET /<user_hash>` - HTML dashboard view
-- `GET /<user_hash>.png` - Pre-rendered PNG image
+### Client
+1. Set WiFi/server credentials in `client/client.ino`
+2. Flash to M5Paper S3 using Arduino IDE
 
 ## Configuration
 
-### Server Environment Variables
-
-- `CONFIG`: JSON configuration for users (required)
-
-### User Configuration Structure
+Single environment variable contains JSON config:
 
 ```json
 {
   "user_hash": {
     "timezone": "America/New_York",
     "weather_location": "New York, NY", 
-    "caldav_urls": "url1,url2,url3",
-    "caldav_filter_names": "calendar1,calendar2"
+    "caldav_urls": "https://user:pass@cal.example.com/cal.ics,https://user:pass@work.com/work.ics",
+    "caldav_filter_names": "personal,work"
   }
 }
 ```
 
-### CalDAV URL Format
+## API
 
+- `GET /` - Health check
+- `GET /<user_hash>` - HTML dashboard
+- `GET /<user_hash>.png` - PNG for e-ink display
+
+## Features
+
+- **Calendar**: CalDAV integration with timezone support
+- **Weather**: Open-Meteo API with day/night icons
+- **Multi-user**: Multiple dashboard configurations
+- **Auto-refresh**: Hourly background updates
+- **E-ink optimized**: Grayscale PNG rendering
+
+## Architecture
+
+**Server** (`server/app.py`): Flask app fetches calendar/weather data, generates PNGs with Playwright
+**Client** (`client/client.ino`): ESP32 firmware polls PNG endpoint, renders to M5Paper S3 display
+
+## Deployment Options
+
+### Docker Compose (Recommended)
+```yaml
+services:
+  dailydisplay:
+    image: ghcr.io/max.schaefer/dailydisplay:latest
+    ports: ["7777:7777"]
+    restart: unless-stopped
+    environment:
+      CONFIG: |
+        {"user_hash": {"timezone": "America/New_York", "weather_location": "New York"}}
 ```
-https://username:password@calendar.provider.com/path/to/calendar.ics
+
+### Docker Run
+```bash
+docker run -d -p 7777:7777 -e CONFIG='{"user_hash":{"timezone":"America/New_York","weather_location":"New York"}}' ghcr.io/max.schaefer/dailydisplay:latest
+```
+
+### Local Development
+```bash
+cd server && python app.py
 ```
 
 ## Dependencies
 
-### Server
-- Flask (web framework)
-- CalDAV (calendar access)
-- Playwright (PNG rendering)
-- iCalendar (event parsing)
-- Gunicorn (WSGI server)
+**Server**: Flask, CalDAV, Playwright, iCalendar, Gunicorn
+**Client**: FastEPD, PNGdec, HTTPClient, NTPClient
 
-### Client
-- FastEPD (E-Paper display)
-- PNGdec (image decoding)
-- HTTPClient (web requests)
-- NTPClient (time sync)
-
-## Production Deployment
-
-### Docker (Recommended)
-```bash
-docker build -t dailydisplay .
-docker run -d \
-  --name dailydisplay \
-  -p 7777:7777 \
-  -e CONFIG="$CONFIG" \
-  --restart unless-stopped \
-  dailydisplay
-```
-
-### System Service
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Run with Gunicorn
-gunicorn --bind 0.0.0.0:7777 app:app
-```
+Pre-built Docker images available for linux/amd64 and linux/arm64 via GitHub Actions.
 
 ## Troubleshooting
 
-### Common Issues
-
-1. **No Calendar Events**: Check CalDAV URL format and credentials
-2. **Weather Not Loading**: Verify location name format 
-3. **PNG Not Rendering**: Ensure Playwright dependencies are installed
-4. **Client Connection Issues**: Check WiFi credentials and server URL
-
-### Logs
-
-Server logs show detailed information about:
-- Configuration loading
-- Data fetching attempts
-- PNG generation status
-- Error conditions
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+- **No events**: Check CalDAV URL format (`https://user:pass@host/path.ics`)
+- **No weather**: Verify location name spelling
+- **PNG errors**: Playwright dependencies missing
+- **Client issues**: Check WiFi credentials and server URL
 
 ## License
 
-This project is provided as-is for personal use. Please ensure compliance with third-party service terms when using CalDAV and weather APIs.
+Provided as-is for personal use. Comply with third-party API terms.

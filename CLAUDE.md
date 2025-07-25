@@ -30,19 +30,68 @@ curl http://localhost:7777/user_hash.png
 
 ## Code Patterns
 
-### Server (Python)
+### Organization & Naming Conventions
+
+#### Server (Python - app.py:665 lines)
+**File Structure (top to bottom):**
+1. **Script dependencies** (lines 1-13): PEP 723 format with `# ///` blocks
+2. **Imports** (lines 15-29): Standard library, then third-party, alphabetically within each group
+3. **Configuration constants** (lines 40-111): ALL_CAPS with descriptive prefixes
+4. **Global state initialization** (lines 116-121): App objects and threading locks
+5. **User configuration loading** (lines 125-172): Environment parsing with error handling
+6. **Helper functions** (lines 177-339): Private functions prefixed with `_`, alphabetically sorted
+7. **Background tasks** (lines 344-366): Long-running daemon threads
+8. **Flask routes** (lines 371-411): HTTP endpoints with decorators
+9. **Core business logic** (lines 416-613): Public functions, alphabetically sorted
+10. **Initialization** (lines 618-648): App startup and background task management
+11. **Main execution** (lines 651-665): Development server startup
+
+**Naming Patterns:**
+- **Constants**: `ALL_CAPS_WITH_UNDERSCORES` (e.g., `API_OPEN_METEO_FORECAST_URL`)
+- **Global variables**: `ALL_CAPS` (e.g., `APP_DATA`, `PNG_CACHE`)
+- **Private functions**: `_snake_case` prefix (e.g., `_build_template_context`)
+- **Public functions**: `snake_case` (e.g., `fetch_calendar_events`)
+- **Flask routes**: `snake_case` matching URL patterns
+- **Variables**: `snake_case` throughout
+
+**Function Organization:**
+- Helper functions alphabetically sorted: `_build_template_context`, `_fetch_lat_lon`, `_process_event_data`, `_regenerate_all_pngs`, `_render_png_for_hash`
+- Public functions alphabetically sorted: `fetch_calendar_events`, `fetch_weather_data`, `get_weather_icon_class`, `refresh_all_data`
+
+#### Client (Arduino/C++ - client.ino:330 lines)
+**File Structure (top to bottom):**
+1. **Includes** (lines 1-11): Standard library first, then third-party libraries
+2. **Configuration constants** (lines 16-38): Grouped by functionality with comments
+3. **Global objects** (lines 42-50): Hardware and network objects, then state variables
+4. **Helper functions** (lines 55-286): Alphabetically sorted by function name
+5. **Setup & Loop** (lines 291-330): Standard Arduino structure
+
+**Naming Patterns:**
+- **Constants**: `ALL_CAPS_WITH_UNDERSCORES` (e.g., `SCREEN_WIDTH`, `WIFI_CONNECTING_MESSAGE_INTERVAL_MS`)
+- **Functions**: `camelCase` (e.g., `connectWifi`, `displayTextMessage`, `updateDashboardImage`)
+- **Global variables**: `camelCase` (e.g., `lastSuccessfulRefreshHour`, `png_buffer`)
+- **Local variables**: `camelCase` throughout
+
+**Function Organization:**
+- All helper functions alphabetically sorted: `connectWifi`, `displayTextMessage`, `freePngBuffer`, `pngDrawCallback`, `updateDashboardImage`, `updateNTPTime`
+
+### Code Quality Patterns
+
+#### Server (Python)
 - **Global state management**: `APP_DATA` dict with threading locks
 - **Configuration loading**: JSON from `CONFIG` environment variable
 - **Error handling**: Try/catch with detailed logging and user-friendly error messages
 - **Thread safety**: All shared data protected with locks (`APP_DATA_LOCK`, `PNG_CACHE_LOCK`)
 - **Background tasks**: Daemon threads for scheduled data refresh
 - **Resource cleanup**: Explicit cleanup of PNG buffers and Playwright resources
+- **Logging**: Extensive `print()` statements (72 occurrences) for debugging and monitoring
 
-### Client (Arduino/C++)
+#### Client (Arduino/C++)
 - **Constants**: All configuration as `const` values at top of file
 - **Memory management**: Explicit allocation/deallocation of PNG buffers with PSRAM fallback
 - **Error recovery**: Infinite retry loops with delays for WiFi/NTP failures
 - **Display management**: Clear error handling for e-ink display operations
+- **Logging**: Detailed `Serial.print*()` statements (37 occurrences) for debugging
 
 ## Key Files
 
