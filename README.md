@@ -115,4 +115,4 @@ Pre-built Docker images available for linux/amd64 and linux/arm64 via GitHub Act
 
 ## License
 
-This project is licensed under the GNU AGPLv3 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
