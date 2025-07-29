@@ -2,7 +2,7 @@
 
 [![Status](https://img.shields.io/badge/status-active-success)](https://img.shields.io/badge/status-active-success)
 [![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-personal%20use-lightgrey)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
 Personal dashboard for E-Ink displays showing calendar events and weather. Python Flask server + Arduino ESP32 client for M5Paper S3.
 
@@ -62,6 +62,7 @@ Single environment variable contains JSON config:
 ## Architecture
 
 **Server** (`server/app.py`): Flask app fetches calendar/weather data, generates PNGs with Playwright
+
 **Client** (`client/client.ino`): ESP32 firmware polls PNG endpoint, renders to M5Paper S3 display
 
 ## Deployment Options
@@ -112,4 +113,4 @@ Pre-built Docker images available for linux/amd64 and linux/arm64 via GitHub Act
 
 ## License
 
-Provided as-is for personal use. Comply with third-party API terms.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
