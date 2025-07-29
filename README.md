@@ -1,9 +1,9 @@
 # Daily Display
 
-[![License](https://img.shields.io/badge/license-GNU%20AGPLv3-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Status](https://img.shields.io/badge/status-active-success)](https://img.shields.io/badge/status-active-success)
 [![Docker](https://img.shields.io/badge/docker-ready-blue.svg)](Dockerfile)
-[![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/)
+[![Python](https://img.shields.io/badge/python-blue)](https://www.python.org/)
 
 Personal dashboard for E-Ink displays showing calendar events and weather. Python Flask server + Arduino ESP32 client for M5Paper S3.
 
@@ -101,10 +101,10 @@ Pre-built Docker images available for linux/amd64 and linux/arm64 via GitHub Act
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make changes following the code standards in CLAUDE.md
+4. Test locally: `cd server && python app.py`
+5. Submit a pull request
 
 ## Troubleshooting
 

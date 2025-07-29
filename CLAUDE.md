@@ -64,7 +64,7 @@ docker run -p 7777:7777 -e CONFIG="$CONFIG" dailydisplay  # Run container
 ## Git Workflow
 ```bash
 # After every change
-# No specific formatter/linter configured yet
+cd server && python app.py &  # Test locally
 git add . && git commit -m "type: description"
 
 # Always commit after verified working changes
