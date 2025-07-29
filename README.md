@@ -1,5 +1,9 @@
 # Daily Display
 
+[![Status](https://img.shields.io/badge/status-active-success)](https://img.shields.io/badge/status-active-success)
+[![Python](https://img.shields.io/badge/python-3.12+-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-personal%20use-lightgrey)](LICENSE)
+
 Personal dashboard for E-Ink displays showing calendar events and weather. Python Flask server + Arduino ESP32 client for M5Paper S3.
 
 ## Quick Start
@@ -90,6 +94,14 @@ cd server && python app.py
 **Client**: FastEPD, PNGdec, HTTPClient, NTPClient
 
 Pre-built Docker images available for linux/amd64 and linux/arm64 via GitHub Actions.
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## Troubleshooting
 
