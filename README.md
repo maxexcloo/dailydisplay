@@ -92,6 +92,7 @@ cd server && python app.py
 ## Dependencies
 
 **Server**: Flask, CalDAV, Playwright, iCalendar, Gunicorn
+
 **Client**: FastEPD, PNGdec, HTTPClient, NTPClient
 
 Pre-built Docker images available for linux/amd64 and linux/arm64 via GitHub Actions.
