@@ -32,9 +32,11 @@ docker run -p 7777:7777 -e CONFIG="$CONFIG" dailydisplay  # Run container
 ### Quality
 - **Comments**: Minimal - only for complex business logic
 - **Documentation**: Update README.md and docs with every feature change
+- **Error handling**: Graceful degradation with extensive logging throughout
 - **Formatting**: Run formatter before commits
 - **KISS principle**: Keep it simple - prefer readable code over clever code
 - **Naming**: `snake_case` functions, `ALL_CAPS` constants (Python), `camelCase` functions, `ALL_CAPS` constants (Arduino)
+- **Testing**: Manual testing via curl endpoints, unit tests where applicable
 - **Trailing newlines**: Required in all files
 
 ## Project Structure
@@ -54,12 +56,42 @@ docker run -p 7777:7777 -e CONFIG="$CONFIG" dailydisplay  # Run container
 - **Memory management**: Arduino client uses PSRAM for PNG buffer allocation
 - **Error handling**: Graceful degradation with extensive logging throughout
 
-## README Guidelines
+## Development Guidelines
+
+### Documentation Structure
+- **CLAUDE.md**: Development standards and project guidelines (this file)
+- **README.md**: Tool overview and usage guide
+
+### Contribution Standards
+- **Code Changes**: Follow sorting rules and maintain test coverage
+- **Documentation**: Keep all docs synchronized and cross-referenced
+- **Feature Changes**: Update README.md and CLAUDE.md when adding features
+
+### README Guidelines
 - **Structure**: Title → Description → Quick Start → Features → Installation → Usage → Contributing
 - **Badges**: Include relevant status badges (build, version, license)
 - **Code examples**: Always include working examples in code blocks
 - **Installation**: Provide copy-paste commands that work
 - **Quick Start**: Get users running in under 5 minutes
+
+## Development Workflow Standards
+
+### Environment Management
+- Use **Docker** for consistent deployment environments
+- Pin Python versions in requirements and Dockerfile
+- Define common tasks in shell scripts or Makefile
+
+### Required Development Tasks
+- **build**: Create Docker image
+- **dev**: Start development server (cd server && python app.py)
+- **fmt**: Code formatting (Black for Python, Arduino IDE formatter)
+- **test**: Run test suite (curl endpoints, unit tests)
+
+## Error Handling Standards
+- **Contextual errors**: Include request context and timestamps in logs
+- **Graceful degradation**: Continue serving cached data when external APIs fail
+- **Informative messages**: Clear error responses for client debugging
+- **User-friendly output**: Meaningful HTTP status codes and error messages
 
 ## Git Workflow
 ```bash
@@ -71,6 +103,12 @@ git add . && git commit -m "type: description"
 # Keep commits small and focused
 ```
 
+## Extension Guidelines
+- **Backward compatibility**: Maintain API endpoints and configuration format
+- **Configuration files**: Single CONFIG environment variable with JSON structure
+- **Feature flags**: Allow gradual feature rollout through configuration
+- **Plugin architecture**: Design for future display types and data sources
+
 ---
 
-*Simple context for AI assistants working on this open source project.*
+*Development guide for the dailydisplay open source project.*
