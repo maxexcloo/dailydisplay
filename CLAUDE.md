@@ -27,17 +27,17 @@
 ## Commands
 ```bash
 # Build
-mise run build       # Create Docker image
+docker build -t dailydisplay .    # Create Docker image
 
 # Development
-mise run dev         # Start development server (cd server && python app.py)
-mise run test        # Run test suite (curl endpoints, unit tests)
+cd server && python app.py         # Start development server
+curl localhost:7777                # Test endpoint
 
 # Format
-mise run fmt         # Code formatting (Black for Python, Arduino IDE formatter)
+black server/                     # Code formatting for Python
 
 # Check
-mise run check       # All validation (fmt + test)
+docker build -t dailydisplay . && curl localhost:7777  # Build and test
 ```
 
 ## Development Guidelines
@@ -100,7 +100,7 @@ mise run check       # All validation (fmt + test)
 ## Git Workflow
 ```bash
 # After every change
-mise run check && git add . && git commit -m "type: description"
+docker build -t dailydisplay . && git add . && git commit -m "type: description"
 
 # Always commit after verified working changes
 # Keep commits small and focused
