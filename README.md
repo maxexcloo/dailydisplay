@@ -31,42 +31,15 @@ docker-compose up -d
 1. Set WiFi/server credentials in `client/client.ino`
 2. Flash to M5Paper S3 using Arduino IDE
 
-## Configuration
-
-Single environment variable contains JSON config:
-
-```json
-{
-  "user_hash": {
-    "timezone": "America/New_York",
-    "weather_location": "New York, NY", 
-    "caldav_urls": "https://user:pass@cal.example.com/cal.ics,https://user:pass@work.com/work.ics",
-    "caldav_filter_names": "personal,work"
-  }
-}
-```
-
-## API
-
-- `GET /` - Health check
-- `GET /<user_hash>` - HTML dashboard
-- `GET /<user_hash>.png` - PNG for e-ink display
-
 ## Features
 
-- **Calendar**: CalDAV integration with timezone support
-- **Weather**: Open-Meteo API with day/night icons
-- **Multi-user**: Multiple dashboard configurations
 - **Auto-refresh**: Hourly background updates
+- **Calendar**: CalDAV integration with timezone support
 - **E-ink optimized**: Grayscale PNG rendering
+- **Multi-user**: Multiple dashboard configurations
+- **Weather**: Open-Meteo API with day/night icons
 
-## Architecture
-
-**Server** (`server/app.py`): Flask app fetches calendar/weather data, generates PNGs with Playwright
-
-**Client** (`client/client.ino`): ESP32 firmware polls PNG endpoint, renders to M5Paper S3 display
-
-## Deployment Options
+## Installation
 
 ### Docker Compose (Recommended)
 ```yaml
@@ -90,11 +63,40 @@ docker run -d -p 7777:7777 -e CONFIG='{"user_hash":{"timezone":"America/New_York
 cd server && python app.py
 ```
 
+## Usage
+
+### Configuration
+
+Single environment variable contains JSON config:
+
+```json
+{
+  "user_hash": {
+    "timezone": "America/New_York",
+    "weather_location": "New York, NY", 
+    "caldav_urls": "https://user:pass@cal.example.com/cal.ics,https://user:pass@work.com/work.ics",
+    "caldav_filter_names": "personal,work"
+  }
+}
+```
+
+### API
+
+- `GET /` - Health check
+- `GET /<user_hash>` - HTML dashboard
+- `GET /<user_hash>.png` - PNG for e-ink display
+
+### Architecture
+
+**Server** (`server/app.py`): Flask app fetches calendar/weather data, generates PNGs with Playwright
+
+**Client** (`client/client.ino`): ESP32 firmware polls PNG endpoint, renders to M5Paper S3 display
+
 ## Dependencies
 
-**Server**: Flask, CalDAV, Playwright, iCalendar, Gunicorn
+**Client**: FastEPD, HTTPClient, NTPClient, PNGdec
 
-**Client**: FastEPD, PNGdec, HTTPClient, NTPClient
+**Server**: CalDAV, Flask, Gunicorn, iCalendar, Playwright
 
 Pre-built Docker images available for linux/amd64 and linux/arm64 via GitHub Actions.
 
@@ -108,10 +110,10 @@ Pre-built Docker images available for linux/amd64 and linux/arm64 via GitHub Act
 
 ## Troubleshooting
 
+- **Client issues**: Check WiFi credentials and server URL
 - **No events**: Check CalDAV URL format (`https://user:pass@host/path.ics`)
 - **No weather**: Verify location name spelling
 - **PNG errors**: Playwright dependencies missing
-- **Client issues**: Check WiFi credentials and server URL
 
 ## License
 
