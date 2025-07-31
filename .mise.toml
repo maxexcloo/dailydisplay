@@ -1,0 +1,27 @@
+[tools]
+python = "3.12"
+uv = "latest"
+
+[tasks.build]
+description = "Run server with uv"
+run = "uv run server/app.py"
+
+[tasks.check]
+description = "Run all checks (fmt and test)"
+depends = ["fmt", "test"]
+
+[tasks.dev]
+description = "Start development server"
+run = "uv run server/app.py"
+
+[tasks.fmt]
+description = "Format Python code"
+run = "uv run --with ruff ruff format server/"
+
+[tasks.lint]
+description = "Lint Python code"
+run = "uv run --with ruff ruff check server/"
+
+[tasks.test]
+description = "Test endpoint"
+run = "curl localhost:7777"

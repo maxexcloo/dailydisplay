@@ -8,8 +8,8 @@
 ## Code Standards
 
 ### Organization
-- **Config/Data**: Alphabetical and recursive (imports, dependencies, object keys)
-- **Documentation**: Sort alphabetically and recursively when it makes logical sense
+- **Config/Data**: Alphabetical and recursive (imports, dependencies, object keys, mise tasks)
+- **Documentation**: Sort sections, lists, and references alphabetically when logical
 - **Files**: Alphabetical in documentation and directories
 - **Functions**: Group by purpose, alphabetical within groups
 - **Variables**: Alphabetical within scope
@@ -18,7 +18,7 @@
 - **Comments**: Minimal - only for complex business logic
 - **Documentation**: Update ARCHITECTURE.md and README.md with every feature change
 - **Error handling**: Graceful degradation with extensive logging throughout
-- **Formatting**: Run `uv run --with ruff black` for Python, Arduino IDE formatter for client code before commits
+- **Formatting**: Run `mise run fmt` for Python, Arduino IDE formatter for client code before commits
 - **KISS principle**: Keep it simple - prefer readable code over clever code
 - **Naming**: `snake_case` functions, `ALL_CAPS` constants (Python), `camelCase` functions, `ALL_CAPS` constants (Arduino)
 - **Testing**: Manual testing via curl endpoints, unit tests where applicable
@@ -27,17 +27,22 @@
 ## Commands
 ```bash
 # Build
-uv run server/app.py              # Run with uv (auto-installs dependencies)
+mise run build           # Run server with uv
 
 # Development
-uv run server/app.py              # Start development server
-curl localhost:7777                # Test endpoint
+mise run dev             # Start development server
 
 # Format
-uv run --with ruff black server/  # Code formatting for Python
+mise run fmt             # Format Python code
 
 # Check
-uv run --with ruff ruff check server/ && curl localhost:7777  # Lint and test
+mise run check           # All validation (fmt and test)
+
+# Lint
+mise run lint            # Lint Python code
+
+# Test
+mise run test            # Test endpoint
 ```
 
 ## Development Guidelines
@@ -72,11 +77,12 @@ uv run --with ruff ruff check server/ && curl localhost:7777  # Lint and test
 - **User-friendly output**: Meaningful HTTP status codes and error messages
 
 ### Required Development Tasks
-- **build**: Create Docker image
-- **check**: All validation (fmt + test)
-- **dev**: Development validation cycle
-- **fmt**: Code formatting
-- **test**: Run test suite
+- **build**: Run server with uv
+- **check**: All validation (fmt and test)
+- **dev**: Start development server
+- **fmt**: Format Python code
+- **lint**: Lint Python code
+- **test**: Test endpoint
 
 ## Project Structure
 - **server/app.py**: Main Flask application with data aggregation and PNG rendering (dependencies in script headers)
