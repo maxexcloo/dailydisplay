@@ -6,19 +6,19 @@ E-ink dashboard system with Python Flask server and Arduino ESP32 client for dis
 
 ## Core Components
 
-### Server Architecture
-- **Framework**: Flask with Jinja2 templating
-- **Data Sources**: CalDAV calendars, Open-Meteo weather API
-- **Rendering**: Playwright for PNG generation
-- **Caching**: In-memory PNG cache with TTL
-- **Background**: Hourly data refresh on minute 58
-
 ### Client Architecture
-- **Hardware**: ESP32 with M5Paper S3 display
 - **Connectivity**: WiFi with HTTP client
 - **Display**: E-ink with FastEPD library
-- **Power**: Deep sleep between updates
+- **Hardware**: ESP32 with M5Paper S3 display
 - **Memory**: PSRAM for PNG buffers
+- **Power**: Deep sleep between updates
+
+### Server Architecture
+- **Background**: Hourly data refresh on minute 58
+- **Caching**: In-memory PNG cache with TTL
+- **Data Sources**: CalDAV calendars, Open-Meteo weather API
+- **Framework**: Flask with Jinja2 templating
+- **Rendering**: Playwright for PNG generation
 
 ## Data Flow
 
@@ -34,23 +34,23 @@ E-ink dashboard system with Python Flask server and Arduino ESP32 client for dis
 - **Personalization**: Timezone, location, calendar URLs per user
 
 ### Performance Optimization
-- **Thread Safety**: Locks for cache and application state
-- **Graceful Degradation**: Cached data during API failures
 - **Batch Processing**: Parallel calendar/weather fetching
+- **Graceful Degradation**: Cached data during API failures
+- **Thread Safety**: Locks for cache and application state
 
 ## Technology Stack
 
 ### Backend
+- **Calendar**: CalDAV integration
+- **Rendering**: Playwright with headless browser
 - **Runtime**: Python 3.12+
 - **Server**: Flask with Gunicorn
-- **Rendering**: Playwright with headless browser
-- **Calendar**: CalDAV integration
 
-### Frontend/Client
-- **Hardware**: ESP32 microcontroller
+### Frontend
 - **Display**: E-ink with FastEPD library
-- **Network**: WiFi with HTTP client
+- **Hardware**: ESP32 microcontroller
 - **Image**: PNG decoding with PNGdec
+- **Network**: WiFi with HTTP client
 
 ---
 

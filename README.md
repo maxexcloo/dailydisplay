@@ -9,6 +9,10 @@ Personal dashboard for E-Ink displays showing calendar events and weather. Pytho
 
 ## Quick Start
 
+### Client
+1. Set WiFi/server credentials in `client/client.ino`
+2. Flash to M5Paper S3 using Arduino IDE
+
 ### Server
 ```bash
 # Set configuration
@@ -26,10 +30,6 @@ docker run -d -p 7777:7777 -e CONFIG="$CONFIG" --restart unless-stopped ghcr.io/
 # Or with docker-compose
 docker-compose up -d
 ```
-
-### Client
-1. Set WiFi/server credentials in `client/client.ino`
-2. Flash to M5Paper S3 using Arduino IDE
 
 ## Features
 
@@ -65,6 +65,18 @@ cd server && python app.py
 
 ## Usage
 
+### API
+
+- `GET /` - Health check
+- `GET /<user_hash>` - HTML dashboard
+- `GET /<user_hash>.png` - PNG for e-ink display
+
+### Architecture
+
+**Client** (`client/client.ino`): ESP32 firmware polls PNG endpoint, renders to M5Paper S3 display
+
+**Server** (`server/app.py`): Flask app fetches calendar/weather data, generates PNGs with Playwright
+
 ### Configuration
 
 Single environment variable contains JSON config:
@@ -79,18 +91,6 @@ Single environment variable contains JSON config:
   }
 }
 ```
-
-### API
-
-- `GET /` - Health check
-- `GET /<user_hash>` - HTML dashboard
-- `GET /<user_hash>.png` - PNG for e-ink display
-
-### Architecture
-
-**Server** (`server/app.py`): Flask app fetches calendar/weather data, generates PNGs with Playwright
-
-**Client** (`client/client.ino`): ESP32 firmware polls PNG endpoint, renders to M5Paper S3 display
 
 ## Dependencies
 

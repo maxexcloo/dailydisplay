@@ -18,7 +18,7 @@
 - **Comments**: Minimal - only for complex business logic
 - **Documentation**: Update ARCHITECTURE.md and README.md with every feature change
 - **Error handling**: Graceful degradation with extensive logging throughout
-- **Formatting**: Run `black` for Python, Arduino IDE formatter for client code before commits
+- **Formatting**: Run `uv run --with ruff black` for Python, Arduino IDE formatter for client code before commits
 - **KISS principle**: Keep it simple - prefer readable code over clever code
 - **Naming**: `snake_case` functions, `ALL_CAPS` constants (Python), `camelCase` functions, `ALL_CAPS` constants (Arduino)
 - **Testing**: Manual testing via curl endpoints, unit tests where applicable
@@ -27,30 +27,30 @@
 ## Commands
 ```bash
 # Build
-docker build -t dailydisplay .    # Create Docker image
+uv run server/app.py              # Run with uv (auto-installs dependencies)
 
 # Development
-cd server && python app.py         # Start development server
+uv run server/app.py              # Start development server
 curl localhost:7777                # Test endpoint
 
 # Format
-black server/                     # Code formatting for Python
+uv run --with ruff black server/  # Code formatting for Python
 
 # Check
-docker build -t dailydisplay . && curl localhost:7777  # Build and test
+uv run --with ruff ruff check server/ && curl localhost:7777  # Lint and test
 ```
 
 ## Development Guidelines
-
-### Documentation Structure
-- **ARCHITECTURE.md**: Technical design and implementation details
-- **CLAUDE.md**: Development standards and project guidelines
-- **README.md**: Tool overview and usage guide
 
 ### Contribution Standards
 - **Code Changes**: Follow sorting rules and maintain test coverage
 - **Documentation**: Keep all docs synchronized and cross-referenced
 - **Feature Changes**: Update README.md and ARCHITECTURE.md when adding features
+
+### Documentation Structure
+- **ARCHITECTURE.md**: Technical design and implementation details
+- **CLAUDE.md**: Development standards and project guidelines
+- **README.md**: Tool overview and usage guide
 
 ## API Interface Standards
 - **Clear responses**: Provide meaningful HTTP status codes and error messages
@@ -61,9 +61,15 @@ docker build -t dailydisplay . && curl localhost:7777  # Build and test
 ## Development Workflow Standards
 
 ### Environment Management
-- Use **Docker** for consistent deployment environments
-- Pin Python versions in requirements and Dockerfile
-- Define common tasks in shell scripts or Makefile
+- Use **uv** for Python dependency management via script headers
+- Dependencies defined in script via `# /// script` blocks
+- Python 3.12+ required as specified in script headers
+
+## Error Handling Standards
+- **Contextual errors**: Include request context and timestamps in logs
+- **Graceful degradation**: Continue serving cached data when external APIs fail
+- **Informative messages**: Clear error responses for client debugging
+- **User-friendly output**: Meaningful HTTP status codes and error messages
 
 ### Required Development Tasks
 - **build**: Create Docker image
@@ -72,15 +78,8 @@ docker build -t dailydisplay . && curl localhost:7777  # Build and test
 - **fmt**: Code formatting
 - **test**: Run test suite
 
-## Error Handling Standards
-- **Contextual errors**: Include request context and timestamps in logs
-- **Graceful degradation**: Continue serving cached data when external APIs fail
-- **Informative messages**: Clear error responses for client debugging
-- **User-friendly output**: Meaningful HTTP status codes and error messages
-
 ## Project Structure
-- **server/app.py**: Main Flask application with data aggregation and PNG rendering
-- **server/requirements.txt**: Python dependencies
+- **server/app.py**: Main Flask application with data aggregation and PNG rendering (dependencies in script headers)
 - **client/client.ino**: ESP32 client firmware for M5Paper S3 display
 - **docker-compose.yml**: Docker deployment configuration
 - **Dockerfile**: Multi-platform container build configuration
@@ -96,15 +95,6 @@ docker build -t dailydisplay . && curl localhost:7777  # Build and test
 - **Backend**: Python 3.12+ with Flask and Gunicorn
 - **Client**: Arduino C++ with ESP32 and FastEPD library
 - **Testing**: Manual testing via curl endpoints, unit tests where applicable
-
-## Git Workflow
-```bash
-# After every change
-docker build -t dailydisplay . && git add . && git commit -m "type: description"
-
-# Always commit after verified working changes
-# Keep commits small and focused
-```
 
 ---
 
