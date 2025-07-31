@@ -9,14 +9,14 @@
 
 ### Organization
 - **Config/Data**: Alphabetical and recursive (imports, dependencies, object keys)
-- **Documentation**: Sort alphabetically and recursively when it makes logical sense - apply to sections, subsections, lists, and references
+- **Documentation**: Sort alphabetically and recursively when it makes logical sense
 - **Files**: Alphabetical in documentation and directories
 - **Functions**: Group by purpose, alphabetical within groups
 - **Variables**: Alphabetical within scope
 
 ### Quality
 - **Comments**: Minimal - only for complex business logic
-- **Documentation**: Update README.md and docs with every feature change
+- **Documentation**: Update ARCHITECTURE.md and README.md with every feature change
 - **Error handling**: Graceful degradation with extensive logging throughout
 - **Formatting**: Run `black` for Python, Arduino IDE formatter for client code before commits
 - **KISS principle**: Keep it simple - prefer readable code over clever code
@@ -24,11 +24,27 @@
 - **Testing**: Manual testing via curl endpoints, unit tests where applicable
 - **Trailing newlines**: Required in all files
 
+## Commands
+```bash
+# Build
+mise run build       # Create Docker image
+
+# Development
+mise run dev         # Start development server (cd server && python app.py)
+mise run test        # Run test suite (curl endpoints, unit tests)
+
+# Format
+mise run fmt         # Code formatting (Black for Python, Arduino IDE formatter)
+
+# Check
+mise run check       # All validation (fmt + test)
+```
+
 ## Development Guidelines
 
 ### Documentation Structure
 - **ARCHITECTURE.md**: Technical design and implementation details
-- **CLAUDE.md**: Development standards and project guidelines (this file)
+- **CLAUDE.md**: Development standards and project guidelines
 - **README.md**: Tool overview and usage guide
 
 ### Contribution Standards
@@ -51,9 +67,10 @@
 
 ### Required Development Tasks
 - **build**: Create Docker image
-- **dev**: Start development server (cd server && python app.py)
-- **fmt**: Code formatting (Black for Python, Arduino IDE formatter)
-- **test**: Run test suite (curl endpoints, unit tests)
+- **check**: All validation (fmt + test)
+- **dev**: Development validation cycle
+- **fmt**: Code formatting
+- **test**: Run test suite
 
 ## Error Handling Standards
 - **Contextual errors**: Include request context and timestamps in logs
@@ -61,11 +78,34 @@
 - **Informative messages**: Clear error responses for client debugging
 - **User-friendly output**: Meaningful HTTP status codes and error messages
 
-## Extension Guidelines
-- **Backward compatibility**: Maintain API endpoints and configuration format
-- **Configuration files**: Single CONFIG environment variable with JSON structure
-- **Feature flags**: Allow gradual feature rollout through configuration
-- **Plugin architecture**: Design for future display types and data sources
+## Project Structure
+- **server/app.py**: Main Flask application with data aggregation and PNG rendering
+- **server/requirements.txt**: Python dependencies
+- **client/client.ino**: ESP32 client firmware for M5Paper S3 display
+- **docker-compose.yml**: Docker deployment configuration
+- **Dockerfile**: Multi-platform container build configuration
+
+## README Guidelines
+- **Badges**: Include relevant status badges (license, status, language, docker)
+- **Code examples**: Always include working examples in code blocks
+- **Installation**: Provide copy-paste commands that work
+- **Quick Start**: Get users running in under 5 minutes
+- **Structure**: Title → Badges → Description → Quick Start → Features → Installation → Usage → Contributing
+
+## Tech Stack
+- **Backend**: Python 3.12+ with Flask and Gunicorn
+- **Client**: Arduino C++ with ESP32 and FastEPD library
+- **Testing**: Manual testing via curl endpoints, unit tests where applicable
+
+## Git Workflow
+```bash
+# After every change
+mise run check && git add . && git commit -m "type: description"
+
+# Always commit after verified working changes
+# Keep commits small and focused
+```
 
 ---
-*Development guide for the dailydisplay open source project.*
+
+*Development guide for the DailyDisplay open source project.*

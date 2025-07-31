@@ -1,187 +1,57 @@
-# Architecture
+# ARCHITECTURE.md - Technical Design
 
 ## Overview
 
-Daily Display is a two-component system designed for E-ink dashboard displays:
+E-ink dashboard system with Python Flask server and Arduino ESP32 client for displaying calendar events and weather.
 
-- **Server**: Python Flask application that aggregates calendar and weather data
-- **Client**: Arduino ESP32 firmware that displays rendered dashboard images
-
-## System Design
+## Core Components
 
 ### Server Architecture
-
-The Flask server (`server/app.py`) implements a multi-threaded architecture:
-
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   HTTP Client   │───▶│   Flask Server   │───▶│  Data Sources   │
-│   (ESP32/Web)   │    │                  │    │ (CalDAV/Weather)│
-└─────────────────┘    └──────────────────┘    └─────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │  Background      │
-                       │  Refresh Thread  │
-                       └──────────────────┘
-                                │
-                                ▼
-                       ┌──────────────────┐
-                       │   PNG Cache      │
-                       │  (Thread-Safe)   │
-                       └──────────────────┘
-```
-
-#### Core Components
-
-**Configuration Management**
-- Single `CONFIG` environment variable containing JSON
-- Multi-user support with user hash-based isolation
-- Timezone-aware calendar processing
-
-**Data Collection**
-- **CalDAV Integration**: Fetches calendar events with filtering support
-- **Weather API**: Open-Meteo integration with geocoding
-- **Background Processing**: Hourly refresh cycle (minute 58)
-
-**Rendering Pipeline**
-- **HTML Generation**: Jinja2 templates for dashboard layout
-- **PNG Generation**: Playwright for server-side rendering
-- **E-ink Optimization**: Grayscale conversion and compression
-
-**Thread Safety**
-- `APP_DATA_LOCK`: Protects global application state
-- `PNG_CACHE_LOCK`: Protects rendered image cache
-- Background thread coordination
+- **Framework**: Flask with Jinja2 templating
+- **Data Sources**: CalDAV calendars, Open-Meteo weather API
+- **Rendering**: Playwright for PNG generation
+- **Caching**: In-memory PNG cache with TTL
+- **Background**: Hourly data refresh on minute 58
 
 ### Client Architecture
-
-The ESP32 client (`client/client.ino`) implements a polling-based display system:
-
-```
-┌──────────────┐    ┌─────────────────┐    ┌──────────────────┐
-│    WiFi      │───▶│   HTTP Client   │───▶│   PNG Decoder    │
-│ Connection   │    │                 │    │                  │
-└──────────────┘    └─────────────────┘    └──────────────────┘
-                                                      │
-                                                      ▼
-┌──────────────┐    ┌─────────────────┐    ┌──────────────────┐
-│  Deep Sleep  │◀───│ Display Driver  │◀───│  Image Buffer    │
-│   Manager    │    │  (FastEPD)      │    │    (PSRAM)       │
-└──────────────┘    └─────────────────┘    └──────────────────┘
-```
-
-#### Key Features
-
-**Memory Management**
-- PSRAM allocation for PNG buffers
-- Automatic garbage collection
-- Low-power operation between updates
-
-**Display Pipeline**
-- PNG decoding with PNGdec library
-- E-ink refresh optimization
-- Error handling and retry logic
-
-**Power Management**
-- Deep sleep between updates
-- Wake-on-timer functionality
-- Battery level monitoring
+- **Hardware**: ESP32 with M5Paper S3 display
+- **Connectivity**: WiFi with HTTP client
+- **Display**: E-ink with FastEPD library
+- **Power**: Deep sleep between updates
+- **Memory**: PSRAM for PNG buffers
 
 ## Data Flow
 
-### Request Lifecycle
+1. **Client Request**: ESP32 requests PNG → Cache check → Data refresh → HTML render → PNG generate → Response
+2. **Background Process**: Timer trigger → Parallel data fetch → Cache clear → Pre-render → Error handling
+3. **Display Update**: PNG receive → Decode → Render to E-ink → Deep sleep
 
-1. **Client Request**: ESP32 requests `/<user_hash>.png`
-2. **Cache Check**: Server checks PNG cache validity
-3. **Data Refresh**: If stale, fetch calendar/weather data
-4. **HTML Rendering**: Generate dashboard HTML from template
-5. **PNG Generation**: Convert HTML to optimized PNG
-6. **Response**: Serve cached or fresh PNG to client
-7. **Display Update**: Client decodes and renders to E-ink display
+## Key Features
 
-### Background Processing
+### Multi-User Support
+- **Configuration**: JSON config via environment variable
+- **Isolation**: User hash-based routing
+- **Personalization**: Timezone, location, calendar URLs per user
 
-1. **Timer Trigger**: Cron-like scheduler at minute 58 each hour
-2. **Data Collection**: Parallel fetch of calendar and weather data
-3. **Cache Invalidation**: Clear stale PNG cache entries
-4. **Pre-rendering**: Generate fresh PNGs for active users
-5. **Error Handling**: Log failures, continue with cached data
+### Performance Optimization
+- **Thread Safety**: Locks for cache and application state
+- **Graceful Degradation**: Cached data during API failures
+- **Batch Processing**: Parallel calendar/weather fetching
 
-## Security Considerations
+## Technology Stack
 
-### Authentication
-- CalDAV credentials in configuration (basic auth)
-- No user authentication for display endpoints
-- User isolation via hash-based routing
+### Backend
+- **Runtime**: Python 3.12+
+- **Server**: Flask with Gunicorn
+- **Rendering**: Playwright with headless browser
+- **Calendar**: CalDAV integration
 
-### Data Handling
-- Sensitive data limited to calendar credentials
-- No persistent storage of user data
-- Memory-only caching with TTL
-
-### Network Security
-- HTTPS enforcement for external API calls
-- Input validation for configuration data
-- Rate limiting considerations for external APIs
-
-## Scalability & Performance
-
-### Server Optimization
-- In-memory caching reduces API calls
-- Background pre-rendering improves response times
-- Thread-safe operations enable concurrent requests
-- Playwright optimization for PNG generation
-
-### Client Optimization
-- Deep sleep reduces power consumption
-- PSRAM utilization for large image buffers
-- Error recovery and retry mechanisms
-- Minimal network overhead per update
-
-## Deployment Architecture
-
-### Container Deployment
-```
-┌─────────────────────────────────────────┐
-│              Docker Host                │
-│  ┌─────────────────────────────────────┐ │
-│  │        dailydisplay:latest          │ │
-│  │                                     │ │
-│  │  ┌─────────────┐  ┌─────────────┐   │ │
-│  │  │ Flask App   │  │Background   │   │ │
-│  │  │ (Port 7777) │  │Thread       │   │ │
-│  │  └─────────────┘  └─────────────┘   │ │
-│  └─────────────────────────────────────┘ │
-└─────────────────────────────────────────┘
-          │                    │
-          ▼                    ▼
-┌─────────────────┐   ┌─────────────────┐
-│   ESP32 Client  │   │  External APIs  │
-│   (WiFi)        │   │ CalDAV/Weather  │
-└─────────────────┘   └─────────────────┘
-```
-
-### High Availability
-- Stateless server design enables horizontal scaling
-- Docker restart policies handle process failures
-- Graceful degradation with cached data during API outages
-- Health check endpoints for monitoring
-
-## Future Extensions
-
-### Planned Enhancements
-- **Multiple Display Types**: Support for different E-ink screen sizes
-- **Plugin Architecture**: Modular data source integration
-- **Configuration UI**: Web interface for user management
-- **Metrics Collection**: Usage analytics and performance monitoring
-
-### Scalability Considerations
-- Database backend for persistent configuration
-- Load balancing for multiple server instances
-- CDN integration for static asset delivery
-- Message queue for background processing
+### Frontend/Client
+- **Hardware**: ESP32 microcontroller
+- **Display**: E-ink with FastEPD library
+- **Network**: WiFi with HTTP client
+- **Image**: PNG decoding with PNGdec
 
 ---
 
-*Technical architecture documentation for the dailydisplay project.*
+*Technical architecture documentation for the DailyDisplay project.*
