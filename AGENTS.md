@@ -1,4 +1,4 @@
-# CLAUDE.md - Development Guide
+# AGENTS.md - Development Guide
 
 ## Project Overview
 **Purpose**: E-ink dashboard with Python Flask server + Arduino ESP32 client displaying calendar events and weather
