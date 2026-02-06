@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.55.0
+FROM mcr.microsoft.com/playwright:v1.58.2
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
